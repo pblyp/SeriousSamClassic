@@ -106,6 +106,10 @@ static void LoadingHook_t(CProgressHookInfo *pphi)
     // finish rendering
     dpHook.Unlock();
     dpHook.dp_Raster->ra_pvpViewPort->SwapBuffers();
+#ifdef PLATFORM_EMSCRIPTEN
+    // let the browser show it
+    Web_WaitFrame();
+#endif
 
     // keep current time
     tvLast = _pTimer->GetHighPrecisionTimer();
@@ -232,6 +236,10 @@ static void LoadingHook_t(CProgressHookInfo *pphi)
   dpHook.Unlock();
   // finish rendering
   dpHook.dp_Raster->ra_pvpViewPort->SwapBuffers();
+#ifdef PLATFORM_EMSCRIPTEN
+  // let the browser show it
+  Web_WaitFrame();
+#endif
 
   // keep current time
   tvLast = _pTimer->GetHighPrecisionTimer();

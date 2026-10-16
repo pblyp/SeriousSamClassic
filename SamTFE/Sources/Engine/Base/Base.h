@@ -67,6 +67,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #elif (defined __OpenBSD__) || (defined __NetBSD__)
     #define PLATFORM_OPENBSD 1
     #define PLATFORM_FREEBSD 1
+#elif (defined __EMSCRIPTEN__)
+  #ifndef PLATFORM_EMSCRIPTEN
+    #define PLATFORM_EMSCRIPTEN 1
+  #endif
 #else
   #warning "UNKNOWN PLATFORM IDENTIFIED!!!!"
   #define PLATFORM_UNKNOWN 1

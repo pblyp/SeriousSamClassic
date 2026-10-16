@@ -117,8 +117,8 @@ static const KeyConversion _akcKeys[] = {
   { KID_I               , SDLK_i, INTNAME("I")},
   { KID_O               , SDLK_o, INTNAME("O")},
   { KID_P               , SDLK_p, INTNAME("P")},
-  { KID_LBRACKET        , SDLK_RIGHTPAREN, INTNAME("[")},
-  { KID_RBRACKET        , SDLK_RIGHTPAREN, INTNAME("]")},
+  { KID_LBRACKET        , SDLK_LEFTBRACKET, INTNAME("[")},
+  { KID_RBRACKET        , SDLK_RIGHTBRACKET, INTNAME("]")},
   { KID_BACKSLASH       , SDLK_BACKSLASH,  INTNAME("\\")},
 
 // 2nd alpha row            

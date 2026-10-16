@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 extern HINSTANCE _hInstance;
 extern BOOL _bRunning, _bQuitScreen;
+extern BOOL _bDemoData;  // running on the official demo data
 
 extern INDEX sam_bFullScreenActive;
 extern INDEX sam_bBorderLessActive;

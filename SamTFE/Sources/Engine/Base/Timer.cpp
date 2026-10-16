@@ -354,6 +354,16 @@ void CTimer_TimerFunc_internal(void)
     if (t < _pTimer->TickQuantum)  // not time to do an update, yet.
         return;
 
+#ifdef PLATFORM_EMSCRIPTEN
+    // the browser stops running the page while its tab is hidden; don't try
+    // to catch up with all the time that passed, just continue from here
+    const TIME tmMaxCatchUp = 0.5f;
+    if (t > tmMaxCatchUp) {
+      _pTimer->tm_InitialTimerUpkeep += CTimerValue((double)(t - tmMaxCatchUp));
+      t = tmMaxCatchUp;
+    }
+#endif
+
     while (t >= _pTimer->TickQuantum) {
       _pTimer->tm_InitialTimerUpkeep += highResQuantum;
       _pTimer->tm_RealTimeTimer += _pTimer->TickQuantum;

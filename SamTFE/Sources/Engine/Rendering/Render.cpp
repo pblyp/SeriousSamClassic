@@ -732,11 +732,14 @@ void CRenderer::Render(void)
   if( !re_bRenderingShadows && re_iIndex==0) {
     // OpenGL allows us to check z-buffer from previous frame - cool deal!
     // Direct3D is, of course, totally different story. :(
+    // (and so is WebGL, which clears the buffers after each frame; see below)
+#ifndef PLATFORM_EMSCRIPTEN
     if( _pGfx->gl_eCurrentAPI==GAT_OGL || d3d_bAlternateDepthReads) {
       ChangeStatsMode(CStatForm::STI_FLARESRENDERING);
       extern void CheckDelayedDepthPoints( const CDrawPort *pdp, INDEX iMirrorLevel=0);
       CheckDelayedDepthPoints(re_pdpDrawPort);
     }
+#endif
     // in 1st pass - mirrors are not drawn
     _bMirrorDrawn = FALSE;
   }
@@ -895,6 +898,13 @@ void CRenderer::Render(void)
   // reset vertex arrays if this is the last renderer  
   if( re_iIndex==0) _avtxScene.PopAll();
 
+#ifdef PLATFORM_EMSCRIPTEN
+  // WebGL doesn't keep the depth buffer of the previous frame, so check depth points now
+  if( !re_bRenderingShadows) {
+    extern void CheckDelayedDepthPoints( const CDrawPort *pdp, INDEX iMirrorLevel=0);
+    CheckDelayedDepthPoints( re_pdpDrawPort, re_iIndex);
+  }
+#endif
   // for D3D (or mirror) we have to check depth points now, because we need back (not depth!) buffer for it,
   // and D3D can't guarantee that it won't be discarded upon swapbuffers (especially if multisampling is on!) :(
 #ifdef SE1_D3D

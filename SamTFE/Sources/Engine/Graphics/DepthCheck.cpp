@@ -23,6 +23,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Engine/Base/Statistics_Internal.h>
 #include <Engine/Templates/StaticArray.cpp>
 #include <Engine/Templates/StaticStackArray.cpp>
+#ifdef PLATFORM_EMSCRIPTEN
+#include <Engine/Graphics/Emscripten/GL1Emulation.h>
+#endif
 
 
 extern INDEX gap_iOptimizeDepthReads;
@@ -58,6 +61,22 @@ static void UpdateDepthPointsVisibility( const CDrawPort *pdp, const INDEX iMirr
   ASSERT( pdp!=NULL && ctCount>0);
   const CRaster *pra = pdp->dp_Raster;
 
+#ifdef PLATFORM_EMSCRIPTEN
+  // WebGL can't read the depth buffer, so visibility is measured with occlusion queries
+  if( eAPI==GAT_OGL)
+  {
+    _sfStats.StartTimer(CStatForm::STI_GFXAPI);
+    for( INDEX idi=0; idi<ctCount; idi++) {
+      DepthInfo &di = pdi[idi];
+      if( iMirrorLevel!=di.di_iMirrorLevel || _iCheckIteration!=di.di_iSwapLastRequest) continue;
+      const PIX pixJ = pra->ra_Height-1 - di.di_pixJ; // OpenGL has Y-inversed buffer!
+      di.di_bVisible = WebGL_CheckDepthPoint( di.di_iID*8 + iMirrorLevel, di.di_pixI, pixJ, di.di_fOoK,
+                                              pra->ra_Width, pra->ra_Height);
+    }
+    _sfStats.StopTimer(CStatForm::STI_GFXAPI);
+    return;
+  }
+#endif
   // OpenGL
   if( eAPI==GAT_OGL)
   { 

@@ -69,6 +69,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Engine/Base/Stream.h>
 #include <Engine/Base/Lists.h>
 #include <Engine/Base/Timer.h>
+#ifdef PLATFORM_EMSCRIPTEN
+#include <Engine/Base/Emscripten/WebPlatform.h>
+#endif
 #include <Engine/Base/ListIterator.inl>
 #include <Engine/Base/Console.h>
 #include <Engine/Base/Console_internal.h>

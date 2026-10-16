@@ -275,6 +275,11 @@ static void DetectCPU(void)
 
   if (ulTFMS == 0) {
     CPrintF(TRANSV("  (No CPU detection in this binary.)\n"));
+#ifdef PLATFORM_EMSCRIPTEN
+    // any machine that runs a browser is far faster than what the game's
+    // auto-adjusting scripts expect (they'd pick the lowest quality for 0 MHz)
+    sys_iCPUMHz = 2000;
+#endif
     return;
   }
 
@@ -537,7 +542,11 @@ static void SetupMemoryManager(void)
     fclose(esrev);
   };
   #else
+  #ifdef PLATFORM_EMSCRIPTEN
+  sys_iRAMPhys = 2048;  // the most a 32-bit WebAssembly module can use
+  #else
   sys_iRAMPhys = 1;  // !!! FIXME: This is bad. Bad. BAD.
+  #endif
   #endif
   sys_iRAMSwap = 1;
 
@@ -699,7 +708,10 @@ ENGINE_API void SE_InitEngine(CTString strGameID)
     _strLogFile = CTFileName(CTString(strExePath)).FileName();
 #endif
   }
-#ifdef PLATFORM_UNIX
+#ifdef PLATFORM_EMSCRIPTEN
+  // not in the persistent user directory, where every line would be written to IndexedDB
+  _pConsole->Initialize("/tmp/"+_strLogFile+".log", 90, 512);
+#elif defined(PLATFORM_UNIX)
   if (_bPortableVersion == FALSE) {
     _pConsole->Initialize(_fnmUserDir+_strLogFile+".log", 90, 512);
   } else {
@@ -951,6 +963,10 @@ ENGINE_API void SE_InitEngine(CTString strGameID)
   // Path vars
   _pShell->DeclareSymbol("user const INDEX sys_iGameBits    ;", (void *) &sys_iGameBits);
   _pShell->DeclareSymbol("user const INDEX sys_iSysPath    ;", (void *) &sys_iSysPath);
+#ifdef PLATFORM_EMSCRIPTEN
+  extern INDEX web_bFrameStats;
+  _pShell->DeclareSymbol("user INDEX web_bFrameStats;", (void *) &web_bFrameStats);
+#endif
 #ifdef PLATFORM_WIN32
   _pShell->DeclareSymbol("user const FLOAT _fPlayerFOVAdjuster    ;", (void *) &_fPlayerFOVAdjuster);
   _pShell->DeclareSymbol("user const FLOAT _fWeaponFOVAdjuster    ;", (void *) &_fWeaponFOVAdjuster);

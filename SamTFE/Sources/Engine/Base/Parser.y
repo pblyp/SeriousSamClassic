@@ -19,6 +19,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Engine/Base/Console.h>
 #include <Engine/Base/Shell.h>
 #include "ParsingSymbols.h"
+#ifdef PLATFORM_EMSCRIPTEN
+#include <Engine/Base/Emscripten/ShellCall.h>
+#endif
 
 #include <Engine/Templates/DynamicStackArray.cpp>
 #include <Engine/Templates/AllocationArray.cpp>
@@ -1035,7 +1038,37 @@ expression
         #define CALLPARAMS ARG[0], ARG[1], ARG[2], ARG[3], ARG[4]
 #endif
   
+#ifdef PLATFORM_EMSCRIPTEN
+        // call with the exact signature (see ShellCall.h)
+        INDEX ctArgs = 0;
+        ULONG ulFloatMask = 0;
+        {for (INDEX istArg = _shell_ast[$3.istType].st_istLastArgument; istArg != -1;
+             istArg = _shell_ast[istArg].st_istPrevInArguments) {
+          const ShellTypeType sttArg = _shell_ast[istArg].st_sttType;
+          if (sttArg == STT_VOID) continue;
+          if (sttArg == STT_FLOAT) ulFloatMask |= 1UL<<ctArgs;
+          ctArgs++;
+        }}
+        #define ShellCallAs(R) ShellCall<R>($1->ss_pvValue, ctArgs, ulFloatMask, (const ULONG *)ARG)
+#endif
         if (callfunc) {
+#ifdef PLATFORM_EMSCRIPTEN
+          if (stResult.st_sttType==STT_VOID) {
+            $$.sttType = STT_VOID;
+            ShellCallAs(void);
+          } else if (stResult.st_sttType==STT_INDEX) {
+            $$.sttType = STT_INDEX;
+            $$.iIndex = ShellCallAs(INDEX);
+          } else if (stResult.st_sttType==STT_FLOAT) {
+            $$.sttType = STT_FLOAT;
+            $$.fFloat = ShellCallAs(FLOAT);
+          } else if (stResult.st_sttType==STT_STRING) {
+            $$.sttType = STT_STRING;
+            CTString &strNew = _shell_astrTempStrings.Push();
+            strNew = ShellCallAs(CTString);
+            $$.strString = (const char*)strNew;
+          } else
+#else
           // if void
           if (stResult.st_sttType==STT_VOID) {
             // just call the function
@@ -1062,7 +1095,9 @@ expression
             PUSHPARAMS;
             strNew = ((CTString (*)(FUNCSIG))$1->ss_pvValue)(CALLPARAMS);
             $$.strString = (const char*)strNew;
-          } else {
+          } else
+#endif
+          {
             ASSERT(FALSE);
             $$.sttType = STT_FLOAT;
             $$.fFloat = -666.0f;

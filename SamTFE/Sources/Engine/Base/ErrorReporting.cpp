@@ -87,6 +87,9 @@ void FatalError(const char *strFormat, ...)
 
   extern void EnableWindowsKeys(void);
   EnableWindowsKeys();
+#elif defined(PLATFORM_EMSCRIPTEN)
+  // the page shows the message (from the console output)
+  SDL_Quit();
 #else
   SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, TRANSV("Fatal Error"), strBuffer, NULL);
   SDL_Quit();

@@ -14,6 +14,35 @@ option(USE_SYSTEM_ZLIB "Use systems zlib development files" On)
 option(USE_CCACHE "Set to ON to use ccache if present in the system" ${USE_CCACHE})
 option(USE_SYSTEM_INSTALL "Install to systems directories" Off)
 
+# WebAssembly build (emcmake cmake -DECC=<native ecc> ...): there are no shared
+# libraries, threads or inline asm, so everything is linked statically into one
+# single threaded binary using the portable C code paths.
+if(EMSCRIPTEN)
+    set(USE_SYSTEM_SDL2 OFF CACHE BOOL "Use systems sdl2 development files" FORCE)
+    set(USE_SYSTEM_ZLIB OFF CACHE BOOL "Use systems zlib development files" FORCE)
+    set(USE_ASM OFF CACHE BOOL "Use ASM code" FORCE)
+    set(USE_SINGLE_THREAD ON CACHE BOOL "Use Single Threaded version" FORCE)
+    set(BUILD_DEDICATED_SERVER OFF CACHE BOOL "Compile the dedicated server, too" FORCE)
+    set(BUILD_MAKEFONT OFF CACHE BOOL "Compile the MakeFONT, too" FORCE)
+    set(BUILD_TEXConv OFF CACHE BOOL "Compile the TEXConv, too" FORCE)
+    set(BUILD_AMP11LIB ON CACHE BOOL "Compile the AMP11LIB, too" FORCE)  # MP3 music is linked in
+    set(WEB_ASYNC "JSPI" CACHE STRING "How the web build yields to the browser: JSPI or ASYNCIFY")
+    set_property(CACHE WEB_ASYNC PROPERTY STRINGS JSPI ASYNCIFY)
+    if(NOT ECC)
+        message(FATAL_ERROR "The web build needs a native entity class compiler: pass -DECC=<path to ecc>")
+    endif()
+    # SDL2, ogg and vorbis come from Emscripten's ports
+    set(WEB_PORT_FLAGS -sUSE_SDL=2 -sUSE_OGG=1 -sUSE_VORBIS=1)
+    # Asyncify can't unwind through native wasm exceptions, so it uses the JS based ones
+    if(WEB_ASYNC STREQUAL "ASYNCIFY")
+        set(WEB_EXCEPTION_FLAGS -fexceptions)
+    else()
+        set(WEB_EXCEPTION_FLAGS -fwasm-exceptions)
+    endif()
+    add_compile_options(${WEB_PORT_FLAGS} ${WEB_EXCEPTION_FLAGS})
+    message(STATUS "Building for the web (${WEB_ASYNC})")
+endif()
+
 # fallback for cmake versions without add_compile_options # RAKE! Borrowed from dhewm3 project
 if(NOT COMMAND add_compile_options)
 	function(add_compile_options)
@@ -44,7 +73,9 @@ endif()
 # they want to use that instead or if their system only
 # allows for a setup like this. Maybe use a SDL2_DIR var or
 # some thing set in the system enviroment.
-if(NOT USE_SYSTEM_SDL2)
+if(EMSCRIPTEN)
+    # headers come with -sUSE_SDL=2
+elseif(NOT USE_SYSTEM_SDL2)
     include_directories(${CMAKE_SOURCE_DIR}/External/SDL2)
 else()
     find_package(SDL2 REQUIRED)
@@ -178,7 +209,7 @@ if(APPLE)
       set(RPATH_SETTINGS "-rpath,$ORIGIN")
       message(STATUS "Using cmake generator 'Unix Makefiles'")
     elseif(CMAKE_GENERATOR STREQUAL "Ninja")
-      set(RPATH_SETTINGS "-rpath=/tmp")     
+      set(RPATH_SETTINGS "-rpath,@executable_path")     
       message(STATUS "Using cmake generator 'Ninja'")
     else()
         message(FATAL_ERROR "Unknown cmake generator")
@@ -219,7 +250,7 @@ if(CMAKE_INSTALL_PREFIX STREQUAL "/usr" OR USE_SYSTEM_INSTALL)
 endif()
 
 # ImageMagic needed for SYSTEM INSTALL
-if(NOT LOCAL_INSTALL)
+if(NOT LOCAL_INSTALL AND NOT EMSCRIPTEN)
 	find_package(ImageMagick COMPONENTS convert)
     if(ImageMagick_convert_FOUND)
         #message(STATUS "ImageMagick convert found: ${ImageMagick_convert_EXECUTABLE}")
@@ -360,9 +391,11 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_
 	# c and c++ compile options
 	add_compile_options(-Wall)
 	add_compile_options(-pipe)
-	add_compile_options(-fPIC)
+	if(NOT EMSCRIPTEN)
+		add_compile_options(-fPIC)
+	endif()
 	add_compile_options(-fms-extensions)
-	if(NOT PANDORA AND NOT PYRA AND NOT RPI4 AND NOT (MACOSX AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64"))
+	if(NOT PANDORA AND NOT PYRA AND NOT RPI4 AND NOT EMSCRIPTEN AND NOT (MACOSX AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64"))
 		if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "riscv64")
 			add_compile_options(-march=rv64gc)
 		    add_compile_options(-ftree-vectorize)
@@ -395,7 +428,7 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_
 		endif()
 		add_compile_options(-fsigned-char)
 	endif()
-    if(NOT PYRA AND NOT PANDORA AND ${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "arm*")
+    if(NOT PYRA AND NOT PANDORA AND NOT EMSCRIPTEN AND NOT (MACOSX AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64") AND ${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "arm*")
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm.*|ARM.*)")  # 32bit
             add_compile_options(-march=armv8-a+crc)
 		    add_compile_options(-mfpu=neon-fp-armv8)
@@ -503,6 +536,14 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_
     		add_definitions(-D_FILE_OFFSET_BITS=64)
     		add_definitions(-D_LARGEFILE_SOURCE=1)
     		add_definitions(-DPRAGMA_ONCE=1)
+	elseif(EMSCRIPTEN)
+		add_definitions(-DPLATFORM_UNIX=1)
+		add_definitions(-DPLATFORM_EMSCRIPTEN=1)
+		add_definitions(-DSTATICALLY_LINKED=1)
+		add_definitions(-DPRAGMA_ONCE=1)
+		add_compile_options(-fsigned-char)
+		add_compile_options(-Wno-deprecated-declarations)
+		add_compile_options(-Wno-unused-function)
 	elseif(FREEBSD)
     		set(CMAKE_SKIP_RPATH ON CACHE BOOL "Skip RPATH" FORCE)
     		add_definitions(-DPLATFORM_UNIX=1)
@@ -952,9 +993,16 @@ endif()
 
 add_custom_target(ParseEntities${MP} DEPENDS ${ENTITIES_H})
 
+# the web build links everything into the main binary
+if(EMSCRIPTEN)
+    set(SE_LIB_TYPE OBJECT)
+else()
+    set(SE_LIB_TYPE SHARED)
+endif()
+
 set(ENTITIESMPLIB "Entities${MP}${DEBUGSUFFIX}")
 if(INTERNAL_NAME STREQUAL "serioussam")
- add_library(${ENTITIESMPLIB} SHARED
+ add_library(${ENTITIESMPLIB} ${SE_LIB_TYPE}
      ${ENTITIES_CPP}
      Entities/Common/Common.cpp
      Entities/Common/Debris.cpp
@@ -964,7 +1012,7 @@ if(INTERNAL_NAME STREQUAL "serioussam")
      Entities/Common/HUD.cpp
  )
 else()
- add_library(${ENTITIESMPLIB} SHARED
+ add_library(${ENTITIESMPLIB} ${SE_LIB_TYPE}
      ${ENTITIES_CPP}
      EntitiesMP/Common/Common.cpp
  	 EntitiesMP/Common/Particles.cpp
@@ -980,7 +1028,7 @@ endif()
 add_dependencies(${ENTITIESMPLIB} ParseEntities${MP})
 
 set(GAMEMPLIB "Game${MP}${DEBUGSUFFIX}")
-add_library(${GAMEMPLIB} SHARED
+add_library(${GAMEMPLIB} ${SE_LIB_TYPE}
     GameMP/Camera.cpp
     GameMP/CompMessage.cpp
     GameMP/CompModels.cpp
@@ -1001,7 +1049,7 @@ add_dependencies(${GAMEMPLIB} ParseEntities${MP})
 
 if(NOT XPLUS)
 set(SHADERSLIB "Shaders${MP}${DEBUGSUFFIX}")
-add_library(${SHADERSLIB} SHARED
+add_library(${SHADERSLIB} ${SE_LIB_TYPE}
     Shaders/AddShader.cpp
     Shaders/AddShaderDS.cpp
     Shaders/BaseShader.cpp
@@ -1271,8 +1319,38 @@ set(ENGINE_SRCS
     ${ADDITIONAL_ENGINE_SRCS}
     ${ZLIB_SRCS}
 )
+if(EMSCRIPTEN)
+    # entity classes and shaders are looked up by name in a generated table instead of dlsym()
+    set(ENTITY_TABLES_H "")
+    foreach(h ${ENTITIES_H})
+        if(h MATCHES "_tables\\.h$")
+            list(APPEND ENTITY_TABLES_H ${h})
+        endif()
+    endforeach()
+    file(GLOB SHADER_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/Shaders/*.cpp")
+    add_custom_command(
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/StaticSymbols.cpp"
+        COMMAND ${CMAKE_COMMAND} "-DOUT=${CMAKE_CURRENT_BINARY_DIR}/StaticSymbols.cpp"
+                "-DTABLES=${ENTITY_TABLES_H}" "-DSHADERS=${SHADER_SRCS}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_static_symbols.cmake"
+        DEPENDS ${ENTITY_TABLES_H} ${SHADER_SRCS} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_static_symbols.cmake"
+        VERBATIM
+    )
+    list(REMOVE_ITEM ENGINE_SRCS
+        Engine/Base/Unix/UnixDynamicLoader.cpp
+        Engine/Graphics/SDL/SDLOpenGL.cpp
+    )
+    list(APPEND ENGINE_SRCS
+        Engine/Graphics/Emscripten/WebGLOpenGL.cpp
+        Engine/Graphics/Emscripten/GL1Emulation.cpp
+        Engine/Base/Emscripten/StaticDynamicLoader.cpp
+        Engine/Base/Emscripten/WebPlatform.cpp
+        "${CMAKE_CURRENT_BINARY_DIR}/StaticSymbols.cpp"
+    )
+endif()
+
 set(ENGINELIB "Engine${MP}${DEBUGSUFFIX}")
-add_library(${ENGINELIB} SHARED
+add_library(${ENGINELIB} ${SE_LIB_TYPE}
      ${ENGINE_SRCS}
 )
 if(MACOSX)
@@ -1317,7 +1395,41 @@ add_executable(SeriousSam${MP}
     SeriousSam/MenuGadgets.cpp
     SeriousSam/MenuPrinting.cpp
 )
-target_link_libraries(SeriousSam${MP} ${ENGINELIB})
+if(EMSCRIPTEN)
+    target_sources(SeriousSam${MP} PRIVATE
+        $<TARGET_OBJECTS:${ENGINELIB}>
+        $<TARGET_OBJECTS:${ENTITIESMPLIB}>
+        $<TARGET_OBJECTS:${GAMEMPLIB}>
+        $<TARGET_OBJECTS:${SHADERSLIB}>
+        $<TARGET_OBJECTS:amp11lib${MP}>
+    )
+    target_link_libraries(SeriousSam${MP} engine_safemath${MP})
+    set(WEB_LINK_FLAGS
+        ${WEB_PORT_FLAGS} ${WEB_EXCEPTION_FLAGS}
+        -sALLOW_MEMORY_GROWTH=1
+        -sINITIAL_MEMORY=256MB
+        -sMAXIMUM_MEMORY=2GB
+        -sSTACK_SIZE=4MB
+        -sMIN_WEBGL_VERSION=2
+        -sMAX_WEBGL_VERSION=2
+        -sFORCE_FILESYSTEM=1
+        -sINVOKE_RUN=0
+        -sEXIT_RUNTIME=1
+        "-sEXPORTED_RUNTIME_METHODS=callMain,FS,IDBFS,HEAPU8,stringToNewUTF8"
+        -lidbfs.js
+        # keep function names, so stack traces of crashes are readable
+        --profiling-funcs
+    )
+    if(WEB_ASYNC STREQUAL "ASYNCIFY")
+        list(APPEND WEB_LINK_FLAGS -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=1048576)
+    else()
+        list(APPEND WEB_LINK_FLAGS -sJSPI=1)
+    endif()
+    target_link_options(SeriousSam${MP} PRIVATE ${WEB_LINK_FLAGS})
+    set_target_properties(SeriousSam${MP} PROPERTIES SUFFIX ".js")
+else()
+    target_link_libraries(SeriousSam${MP} ${ENGINELIB})
+endif()
 add_dependencies(SeriousSam${MP} ParseEntities${MP})
 # Make symbols in the main executable available to dynamic objects
 set_target_properties(SeriousSam${MP} PROPERTIES ENABLE_EXPORTS ON)
@@ -1378,7 +1490,7 @@ set(AMP11LIB_SOURCE_FILES
     amp11lib/ampdec.h
     amp11lib/ampsynth.cpp)
 
-add_library(amp11lib${MP} SHARED ${AMP11LIB_SOURCE_FILES})
+add_library(amp11lib${MP} ${SE_LIB_TYPE} ${AMP11LIB_SOURCE_FILES})
 endif()
 
 if(MACOSX)
@@ -1451,7 +1563,9 @@ if(FREEBSD)
 endif()
 
 # Set output name for not local installation
-if(LOCAL_INSTALL)
+if(EMSCRIPTEN)
+ set_target_properties(SeriousSam${MP} PROPERTIES OUTPUT_NAME "${INTERNAL_NAME}")
+elseif(LOCAL_INSTALL)
  set_target_properties(SeriousSam${MP} PROPERTIES OUTPUT_NAME "SeriousSam")
  set_target_properties(DedicatedServer${MP}  PROPERTIES OUTPUT_NAME "DedicatedServer")
  set_target_properties(MakeFONT${MP} PROPERTIES OUTPUT_NAME "MakeFONT")
@@ -1469,7 +1583,9 @@ endif()
 endif() # NOT XPLUS
 
 # RAKE! Install Section.
-if(LOCAL_INSTALL AND NOT XPLUS)
+if(EMSCRIPTEN)
+    # the web build is packaged by web/build.sh
+elseif(LOCAL_INSTALL AND NOT XPLUS)
 if(DEBUG) # RAKE! Will this work with TFE?
     install(TARGETS SeriousSam${MP} ${SHADERSLIB} ${GAMEMPLIB} ${ENTITIESMPLIB}
             RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}/Bin"
@@ -1592,7 +1708,7 @@ endif()
 
 # RAKE! If CMAKE_INSTALL_PREFIX was set during config then its not a local install
 # and SE1_10.gro needs to be installed to Games root dir.
-if(NOT LOCAL_INSTALL AND NOT XPLUS)
+if(NOT LOCAL_INSTALL AND NOT XPLUS AND NOT EMSCRIPTEN)
     install(FILES ${CMAKE_ADD_TARGET_DIR}/../SE1_10b.gro
             DESTINATION "${CMAKE_INSTALL_PREFIX}/share/${INTERNAL_NAME}"
             PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)

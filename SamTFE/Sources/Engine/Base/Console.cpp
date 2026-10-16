@@ -209,7 +209,12 @@ void CConsole::PutString(const char *strString)
 
   // if dedicated server
   extern BOOL _bDedicatedServer;
-  if (_bDedicatedServer) {
+#ifdef PLATFORM_EMSCRIPTEN
+  const BOOL bPrint = TRUE;  // the page shows it in the browser's console
+#else
+  const BOOL bPrint = _bDedicatedServer;
+#endif
+  if (bPrint) {
     // print to output
     printf("%s", strString);
   }

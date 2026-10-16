@@ -635,17 +635,11 @@ void CMGHighScore::Render( CDrawPort *pdp)
   strHighScores[0][5] = TRANS("Score");
 
   {for (INDEX i=0; i<HIGHSCORE_COUNT; i++) {
-    switch(_pGame->gm_ahseHighScores[i].hse_gdDifficulty) {
+    // switch on the integer value; -100 marks an empty slot and is outside the enum's range
+    switch((INDEX)_pGame->gm_ahseHighScores[i].hse_gdDifficulty) {
     default:
       ASSERT(FALSE);
-#ifdef PLATFORM_FREEBSD
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wenum-constexpr-conversion"
-    case (CSessionProperties::GameDifficulty)-100:
-#pragma clang diagnostic pop
-#else
-	case (CSessionProperties::GameDifficulty)-100:
-#endif
+    case -100:
       strHighScores[i+1][1] = "---";
       continue;
       break;

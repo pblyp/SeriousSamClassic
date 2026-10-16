@@ -434,6 +434,18 @@ cd SeriousSamClassic
 ./build-linux64demo.sh        	    # use build-linux32demo.sh for 32-bits
 ```
 
+Web browsers
+------------
+
+The First Encounter also builds for web browsers (WebAssembly and WebGL 2), with the demo
+packaged in. With [emsdk](https://emscripten.org/docs/getting_started/downloads.html) activated:
+
+```
+web/build.sh
+```
+
+See [web/README.md](web/README.md) for details.
+
 Windows
 -------
 * This project can be compiled starting from Windows 7 and higher.

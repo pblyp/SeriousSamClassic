@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Serious Sam: The First Encounter</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game">
+  <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+  <button id="fullscreen" type="button" title="Fullscreen" hidden>&#x26F6;</button>
+  <div id="overlay">
+    <div id="panel">
+      <h1>Serious Sam</h1>
+      <p class="subtitle">The First Encounter</p>
+
+      <div id="choose">
+        <button id="play-demo" class="primary" type="button">Play the demo</button>
+        <p class="note">Karnak demo level &middot; about 105&nbsp;MB, downloaded once</p>
+        <label id="own-files" class="secondary" tabindex="0">
+          Use my game files&hellip;
+          <input id="folder" type="file" webkitdirectory multiple hidden>
+        </label>
+        <p class="note">Pick (or drop here) the folder where <em>The First Encounter</em> is installed.<br>
+          The files stay on this computer.</p>
+      </div>
+
+      <div id="loading" hidden>
+        <div id="status">Loading&hellip;</div>
+        <progress id="progress" max="1" value="0"></progress>
+        <button id="start" class="primary" type="button" hidden>Start</button>
+      </div>
+
+      <p class="help">Click the game to use the mouse &middot; <kbd>Esc</kbd> menu &middot; <kbd>~</kbd> console</p>
+    </div>
+  </div>
+</div>
+<pre id="log" hidden></pre>
+<script src="main.js"></script>
+</body>
+</html>

@@ -20,9 +20,21 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Engine/Engine.h>
 #include <Engine/Base/Timer.h>
 
+#ifdef PLATFORM_EMSCRIPTEN
+#include <emscripten.h>
+#endif
+
 void CTimer::Sleep(DWORD milliseconds)
 {
+#ifdef PLATFORM_EMSCRIPTEN
+    // give the browser control while waiting
+    extern double _dWebSleepTime;
+    const double dStart = emscripten_get_now();
+    emscripten_sleep(milliseconds);
+    _dWebSleepTime += emscripten_get_now() - dStart;
+#else
     SDL_Delay(milliseconds);
+#endif
 }
 
 // end of SDLTimer.cpp ...

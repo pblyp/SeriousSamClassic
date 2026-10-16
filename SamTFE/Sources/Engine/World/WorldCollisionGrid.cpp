@@ -39,6 +39,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 //#pragma inline_depth(0)
 
+#ifdef PLATFORM_EMSCRIPTEN
+// WebAssembly saturates out of range float to int conversions, but the grid code
+// relies on x86 behavior, where they (and infinities) become INT_MIN
+static inline INDEX GridCoordX86(double d)
+{
+  return (d >= -2147483648.0 && d < 2147483648.0) ? INDEX(d) : INDEX(0x80000000);
+}
+#endif
+
 // find grid box from float coordinates
 static inline void BoxToGrid(
   const FLOATaabbox3D &boxEntity, INDEX &iMinX, INDEX &iMaxX, INDEX &iMinZ, INDEX &iMaxZ)
@@ -57,6 +66,16 @@ static inline void BoxToGrid(
   iMinZ = (Isinf(fMinZ))?INDEX(GRID_MIN):Clamp(INDEX(floor(fMinZ/GRID_CELLSIZE)), (INDEX)GRID_MIN, (INDEX)GRID_MAX);
   iMaxX = (Isinf(fMaxX))?INDEX(GRID_MIN):Clamp(INDEX(ceil(fMaxX/GRID_CELLSIZE)), (INDEX)GRID_MIN, (INDEX)GRID_MAX);
   iMaxZ = (Isinf(fMaxZ))?INDEX(GRID_MIN):Clamp(INDEX(ceil(fMaxZ/GRID_CELLSIZE)), (INDEX)GRID_MIN, (INDEX)GRID_MAX);
+#elif defined(PLATFORM_EMSCRIPTEN)
+  iMinX = GridCoordX86(floor(fMinX/GRID_CELLSIZE));
+  iMinZ = GridCoordX86(floor(fMinZ/GRID_CELLSIZE));
+  iMaxX = GridCoordX86(ceil(fMaxX/GRID_CELLSIZE));
+  iMaxZ = GridCoordX86(ceil(fMaxZ/GRID_CELLSIZE));
+
+  iMinX = Clamp(iMinX, (INDEX)GRID_MIN, (INDEX)GRID_MAX);
+  iMinZ = Clamp(iMinZ, (INDEX)GRID_MIN, (INDEX)GRID_MAX);
+  iMaxX = Clamp(iMaxX, (INDEX)GRID_MIN, (INDEX)GRID_MAX);
+  iMaxZ = Clamp(iMaxZ, (INDEX)GRID_MIN, (INDEX)GRID_MAX);
 #else
   iMinX = INDEX(floor(fMinX/GRID_CELLSIZE));
   iMinZ = INDEX(floor(fMinZ/GRID_CELLSIZE));

@@ -47,6 +47,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "LCDDrawing.h"
 #include "CmdLine.h"
 #include "Credits.h"
+#ifdef PLATFORM_EMSCRIPTEN
+#include <emscripten/html5.h>
+#endif
 
 
 CGame *_pGame = NULL;
@@ -62,7 +65,7 @@ extern FLOAT _fGlobalOptionsAdjuster;
 extern FLOAT _fGlobalModAdjuster;
 extern FLOAT _fGlobalButtonAdjuster;
 extern FLOAT _fGlobalProfileFOVAdjuster;
-#ifdef PLATFORM_UNIX
+#if defined(PLATFORM_UNIX) && !defined(STATICALLY_LINKED)
 ENGINE_API FLOAT _fWeaponFOVAdjuster;
 ENGINE_API FLOAT _fPlayerFOVAdjuster;
 ENGINE_API FLOAT _fArmorHeightAdjuster;
@@ -167,11 +170,8 @@ __extern CTextureObject *_ptoLogoEAX = NULL;
 #ifdef FIRST_ENCOUNTER  // First Encounter
 CTString sam_strVersion = "1.10";
 CTString sam_strModName = TRANS("-   T H E  F I R S T  E N C O U N T E R   -");
-#if _SE_DEMO
-  CTString sam_strFirstLevel = "Levels\\KarnakDemo.wld";
-#else
-  CTString sam_strFirstLevel = "Levels\\01_Hatshepsut.wld";
-#endif
+// replaced by the demo level at startup if only the demo data is installed (see DetectDemoData())
+CTString sam_strFirstLevel = "Levels\\01_Hatshepsut.wld";
 CTString sam_strIntroLevel = "Levels\\Intro.wld";
 CTString sam_strGameName = "serioussam";
 
@@ -247,7 +247,11 @@ static void QuitGame(void)
 // !!! FIXME: rcg01042002  method of determining the current process ID and
 // !!! FIXME: rcg01042002  determining if a given process ID is still running,
 // !!! FIXME: rcg01042002  and those are easy abstractions.
-#ifdef PLATFORM_UNIX
+#ifdef PLATFORM_EMSCRIPTEN
+// the page can't remove a lock file when it is closed, so there is none
+static void DirectoryLockOn(void) {}
+static void DirectoryLockOff(void) {}
+#elif defined(PLATFORM_UNIX)
 static CTFileName _fnmLock;
 static FILE *_hLock = NULL;
 static void DirectoryLockOn(void)
@@ -495,6 +499,32 @@ void LoadAndForceTexture(CTextureObject &to, CTextureObject *&pto, const CTFileN
 
 static char *argv0 = NULL;
 
+#ifdef PLATFORM_EMSCRIPTEN
+extern FLOAT web_fMaxPixelRatio;
+static void WebCanvasSize(PIX &pixWidth, PIX &pixHeight);
+static void WebFollowCanvasSize(void);
+static void WebCheckPointerLock(void);
+static void WebSaveSettings(void);
+#endif
+
+// TRUE when running on the data of the official demo instead of the full game
+BOOL _bDemoData = _SE_DEMO;
+
+// detect the demo data at runtime, so the same binary runs both the demo and the full game
+static void DetectDemoData(void)
+{
+#ifdef FIRST_ENCOUNTER
+  if (!_bDemoData) {
+    _bDemoData = FileExists(CTFILENAME("Levels\\KarnakDemo.wld"))
+             && !FileExists(CTFILENAME("Levels\\01_Hatshepsut.wld"));
+  }
+  if (_bDemoData) {
+    sam_strFirstLevel = "Levels\\KarnakDemo.wld";
+    CPrintF(TRANS("Demo data detected.\n"));
+  }
+#endif
+}
+
 void InitializeGame(void)
 {
   try {
@@ -721,6 +751,7 @@ BOOL Init( HINSTANCE hInstance, int nCmdShow, CTString strCmdLine)
   SE_InitEngine(sam_strGameName);
 #endif
   SE_LoadDefaultFonts();
+  DetectDemoData();
   // now print the output of command line parsing
   CPrintF("%s", (const char *) cmd_strOutput);
 
@@ -769,6 +800,9 @@ BOOL Init( HINSTANCE hInstance, int nCmdShow, CTString strCmdLine)
   _pShell->DeclareSymbol("persistent INDEX sam_bMentalActivated;", (void *) &sam_bMentalActivated);
 
   _pShell->DeclareSymbol("user void Quit(void);", (void *) &QuitGame);
+#ifdef PLATFORM_EMSCRIPTEN
+  _pShell->DeclareSymbol("persistent user FLOAT web_fMaxPixelRatio;", (void *) &web_fMaxPixelRatio);
+#endif
 
   _pShell->DeclareSymbol("persistent user INDEX sam_iVideoSetup;",     (void *) &sam_iVideoSetup);
   _pShell->DeclareSymbol("user void ApplyRenderingPreferences(void);", (void *) &ApplyRenderingPreferences);
@@ -842,6 +876,13 @@ BOOL Init( HINSTANCE hInstance, int nCmdShow, CTString strCmdLine)
   LoadLevelsList();
   LoadDemosList();
 
+#ifdef PLATFORM_EMSCRIPTEN
+  // the page decides the size: render at the size of the canvas
+  WebCanvasSize(sam_iScreenSizeI, sam_iScreenSizeJ);
+  sam_bFullScreenActive = FALSE;
+  sam_bBorderLessActive = FALSE;
+  sam_iGfxAPI = GAT_OGL;
+#endif
   // apply application mode
   StartNewMode( (GfxAPIType)sam_iGfxAPI, sam_iDisplayAdapter, sam_iScreenSizeI, sam_iScreenSizeJ, sam_iAspectSizeI, sam_iAspectSizeJ, (enum DisplayDepth)sam_iDisplayDepth, sam_bFullScreenActive ,sam_bBorderLessActive);
 
@@ -1160,6 +1201,9 @@ void QuitScreenLoop(void)
 
     #ifdef SINGLE_THREADED
       _pTimer->HandleTimerHandlers();
+    #endif
+    #ifdef PLATFORM_EMSCRIPTEN
+      Web_WaitFrame();
     #endif
   }
 }
@@ -1561,6 +1605,20 @@ int SubMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int 
       _iAddonExecState = 3;
     }
 
+#ifdef PLATFORM_EMSCRIPTEN
+    WebFollowCanvasSize();
+    WebCheckPointerLock();
+    // the page can be closed at any time, so settings are saved whenever it is hidden
+    if (Web_SaveRequested()) {
+      WebSaveSettings();
+    }
+    // commands from the page (used by automated tests)
+    const CTString strWebCommands = Web_TakeCommands();
+    if (strWebCommands!="") {
+      _pShell->Execute(strWebCommands);
+    }
+#endif
+
     // automaticaly manage input enable/disable toggling
     UpdateInputEnabledState();
     // automaticaly manage pause toggling
@@ -1571,8 +1629,13 @@ int SubMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int 
     // do the main game loop and render screen
     DoGame();
 
+#ifdef PLATFORM_EMSCRIPTEN
+    // the browser paces the frames
+    Web_WaitFrame();
+#else
     // limit current frame rate if neeeded
     LimitFrameRate();
+#endif
 
   } // end of main application loop
 
@@ -1588,6 +1651,10 @@ int SubMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int 
 
 void CheckModReload(void)
 {
+#ifdef PLATFORM_EMSCRIPTEN
+  // there is no other executable to start
+  return;
+#endif
   if (_fnmModToLoad!="") {
 #ifndef NDEBUG
 #ifdef PLATFORM_WIN32
@@ -1793,6 +1860,79 @@ int main(int argc, char **argv)
 #endif
 
 
+// create the drawport for wide screen mode (it has fixed dimensions)
+static void CreateWideScreenDrawPort(void)
+{
+  const PIX pixYBegAdj = pdpNormal->GetHeight() * 21/24;
+  const PIX pixYEndAdj = pdpNormal->GetHeight() * 3/24;
+  const PIX pixXEnd    = pdpNormal->GetWidth();
+  pdpWideScreen = new CDrawPort( pdpNormal, PIXaabbox2D( PIX2D(0,pixYBegAdj), PIX2D(pixXEnd, pixYEndAdj)));
+  pdpWideScreen->dp_fWideAdjustment = 9.0f / 12.0f;
+}
+
+#ifdef PLATFORM_EMSCRIPTEN
+// the largest ratio of rendered pixels to CSS pixels (high resolution displays can be expensive)
+FLOAT web_fMaxPixelRatio = 2.0f;
+
+// the size to render at, so the image fills the canvas on the page
+static void WebCanvasSize(PIX &pixWidth, PIX &pixHeight)
+{
+  double dCSSWidth = 0, dCSSHeight = 0;
+  emscripten_get_element_css_size("#canvas", &dCSSWidth, &dCSSHeight);
+  web_fMaxPixelRatio = Clamp(web_fMaxPixelRatio, 0.25f, 4.0f);
+  const double dRatio = Min(emscripten_get_device_pixel_ratio(), (double)web_fMaxPixelRatio);
+  pixWidth  = Max(PIX(dCSSWidth *dRatio + 0.5), PIX(320));
+  pixHeight = Max(PIX(dCSSHeight*dRatio + 0.5), PIX(240));
+}
+
+// follow the size of the canvas without restarting the display mode
+static void WebFollowCanvasSize(void)
+{
+  if (pvpViewPort==NULL || pdpNormal==NULL) return;
+  PIX pixWidth, pixHeight;
+  WebCanvasSize(pixWidth, pixHeight);
+  CRaster &ra = pvpViewPort->vp_Raster;
+  if (pixWidth==ra.ra_Width && pixHeight==ra.ra_Height) return;
+
+  SDL_SetWindowSize((SDL_Window *)_hwndMain, pixWidth, pixHeight);
+  ra.Resize(pixWidth, pixHeight);
+  sam_iScreenSizeI = pixWidth;
+  sam_iScreenSizeJ = pixHeight;
+  const BOOL bWide = (pdp==pdpWideScreen);
+  delete pdpWideScreen;
+  CreateWideScreenDrawPort();
+  pdp = bWide ? pdpWideScreen : pdpNormal;
+  _pGame->EnableLoadingHook(pdp);
+  SetAdjusters();
+}
+
+// save what the game would save when quitting
+static void WebSaveSettings(void)
+{
+  _pShell->StorePersistentSymbols(CTString("Scripts\\PersistentSymbols.ini"));
+  _pGame->SavePlayersAndControls();
+  try {
+    _pGame->Save_t();
+  } catch (const char *strError) {
+    CPrintF("Cannot save game settings: %s\n", strError);
+  }
+}
+
+// the browser releases the mouse when Escape is pressed; react as if the game got the key
+static void WebCheckPointerLock(void)
+{
+  static BOOL _bWasLocked = FALSE;
+  EmscriptenPointerlockChangeEvent ple;
+  if (emscripten_get_pointerlock_status(&ple) != EMSCRIPTEN_RESULT_SUCCESS) return;
+  const BOOL bLocked = ple.isActive;
+  if (_bWasLocked && !bLocked && _pInput->IsInputEnabled() && !bMenuActive
+   && _pGame->gm_csConsoleState==CS_OFF && _pGame->gm_csComputerState==CS_OFF) {
+    StartMenus();
+  }
+  _bWasLocked = bLocked;
+}
+#endif
+
 // try to start a new display mode
 BOOL TryToSetDisplayMode( enum GfxAPIType eGfxAPI, INDEX iAdapter, PIX pixSizeI, PIX pixSizeJ,
                           PIX aspSizeI, PIX aspSizeJ, enum DisplayDepth eColorDepth, BOOL bFullScreenMode, BOOL bBorderLessMode)
@@ -1859,11 +1999,7 @@ BOOL TryToSetDisplayMode( enum GfxAPIType eGfxAPI, INDEX iAdapter, PIX pixSizeI,
     }
 
     // lets try some wide screen screaming :)
-    const PIX pixYBegAdj = pdp->GetHeight() * 21/24;
-    const PIX pixYEndAdj = pdp->GetHeight() * 3/24;
-    const PIX pixXEnd    = pdp->GetWidth();
-    pdpWideScreen = new CDrawPort( pdp, PIXaabbox2D( PIX2D(0,pixYBegAdj), PIX2D(pixXEnd, pixYEndAdj)));
-    pdpWideScreen->dp_fWideAdjustment = 9.0f / 12.0f;
+    CreateWideScreenDrawPort();
     if( sam_bWideScreen) pdp = pdpWideScreen;
 
     // initial screen fill and swap, just to get context running
