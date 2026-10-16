@@ -505,6 +505,7 @@ static void WebCanvasSize(PIX &pixWidth, PIX &pixHeight);
 static void WebFollowCanvasSize(void);
 static void WebCheckPointerLock(void);
 static void WebSaveSettings(void);
+static void WebPushKey(SDL_Keycode key);
 #endif
 
 // TRUE when running on the data of the official demo instead of the full game
@@ -1617,6 +1618,10 @@ int SubMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int 
     if (strWebCommands!="") {
       _pShell->Execute(strWebCommands);
     }
+    // keys pressed with on screen buttons (handled with the next frame's messages)
+    for (INDEX iKey = Web_TakeKeyPress(); iKey!=0; iKey = Web_TakeKeyPress()) {
+      WebPushKey((SDL_Keycode)iKey);
+    }
 #endif
 
     // automaticaly manage input enable/disable toggling
@@ -1630,6 +1635,9 @@ int SubMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int 
     DoGame();
 
 #ifdef PLATFORM_EMSCRIPTEN
+    // the page shows touch controls only while playing (in menus and demos, taps are clicks)
+    Web_SetGameInput(_pInput->IsInputEnabled()
+      && _gmRunningGameMode!=GM_NONE && _gmRunningGameMode!=GM_DEMO && _gmRunningGameMode!=GM_INTRO);
     // the browser paces the frames
     Web_WaitFrame();
 #else
@@ -1904,6 +1912,22 @@ static void WebFollowCanvasSize(void)
   pdp = bWide ? pdpWideScreen : pdpNormal;
   _pGame->EnableLoadingHook(pdp);
   SetAdjusters();
+}
+
+// queue a press and release of a key, as if it came from the keyboard
+static void WebPushKey(SDL_Keycode key)
+{
+  SDL_Event ev;
+  SDL_zero(ev);
+  ev.key.windowID = SDL_GetWindowID((SDL_Window *)_hwndMain);
+  ev.key.keysym.sym = key;
+  ev.key.keysym.scancode = SDL_GetScancodeFromKey(key);
+  ev.type = SDL_KEYDOWN;
+  ev.key.state = SDL_PRESSED;
+  SDL_PushEvent(&ev);
+  ev.type = SDL_KEYUP;
+  ev.key.state = SDL_RELEASED;
+  SDL_PushEvent(&ev);
 }
 
 // save what the game would save when quitting

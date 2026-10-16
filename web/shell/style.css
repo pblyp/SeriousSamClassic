@@ -118,21 +118,6 @@ kbd {
   border-radius: 3px;
   padding: 0 0.3em;
 }
-#fullscreen {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  min-width: 0;
-  padding: 0.2rem 0.5rem;
-  font-size: 1.2rem;
-  color: var(--fg);
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid var(--line);
-  opacity: 0.5;
-}
-#fullscreen:hover {
-  opacity: 1;
-}
 #log {
   position: fixed;
   left: 0;
@@ -144,5 +129,189 @@ kbd {
   font-size: 11px;
   background: rgba(0, 0, 0, 0.75);
   color: #9f9;
+  pointer-events: none;
+}
+
+/* touch screen controls (touch.js) */
+html.touch, html.touch body, html.touch #canvas {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.touch-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  --tc-fg: rgba(255, 255, 255, 0.85);
+  --tc-bg: rgba(0, 0, 0, 0.25);
+  --tc-line: rgba(255, 255, 255, 0.45);
+  --tc-pressed: rgba(240, 176, 48, 0.55);
+}
+.touch-controls > * {
+  pointer-events: auto;
+  touch-action: none;
+}
+/* outside of play only Esc and fullscreen are there, taps go to the game as the mouse */
+.touch-controls.menu-mode > :not(.tc-escape):not(.tc-fullscreen) {
+  display: none;
+}
+.tc-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.tc-move {
+  left: 0;
+  width: 40%;
+}
+.tc-look {
+  right: 0;
+  width: 60%;
+}
+.tc-stick-base {
+  position: absolute;
+  width: 112px;
+  height: 112px;
+  margin: -56px 0 0 -56px;
+  border-radius: 50%;
+  border: 2px solid var(--tc-line);
+  background: var(--tc-bg);
+  pointer-events: none;
+  visibility: hidden;
+}
+.tc-stick-base.active {
+  visibility: visible;
+}
+.tc-stick-knob {
+  position: absolute;
+  left: 28px;
+  top: 28px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--tc-line);
+}
+.tc-button {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 13vmin;
+  height: 13vmin;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--tc-line);
+  background: var(--tc-bg);
+  color: var(--tc-fg);
+  font: bold clamp(11px, 2.6vmin, 16px) system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.tc-button.pressed {
+  background: var(--tc-pressed);
+}
+.tc-fire {
+  right: 6vmin;
+  bottom: 19vmin;
+  width: 20vmin;
+  height: 20vmin;
+}
+.tc-jump {
+  right: 29vmin;
+  bottom: 14vmin;
+}
+.tc-crouch {
+  right: 44vmin;
+  bottom: 12vmin;
+}
+.tc-use {
+  right: 10vmin;
+  bottom: 42vmin;
+}
+.tc-weapon-prev,
+.tc-weapon-next {
+  right: 8px;
+  width: 10vmin;
+  height: 10vmin;
+  border-radius: 8px;
+}
+.tc-weapon-prev {
+  top: 60px;
+}
+.tc-weapon-next {
+  top: calc(60px + 12vmin);
+}
+/* below the game's score counters */
+.tc-escape {
+  left: 8px;
+  top: 48px;
+  width: 11vmin;
+  height: 8vmin;
+  border-radius: 8px;
+}
+.tc-fullscreen {
+  left: calc(16px + 11vmin);
+  top: 48px;
+  width: 8vmin;
+  height: 8vmin;
+  border-radius: 8px;
+  font-size: clamp(16px, 4vmin, 24px);
+}
+.tc-rotate {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%);
+  padding: 0.3rem 0.8rem;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--tc-fg);
+  font: 14px system-ui, sans-serif;
+  pointer-events: none;
+  display: none;
+}
+@media (orientation: portrait) {
+  .touch-controls:not(.menu-mode) .tc-rotate {
+    display: block;
+  }
+}
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.5rem;
+  margin-top: 1.5rem;
+}
+.option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.option input {
+  accent-color: var(--accent);
+}
+.option select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+}
+.tc-debug {
+  position: absolute;
+  left: 50%;
+  top: 40px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 4px 8px;
+  max-width: 60%;
+  background: rgba(0, 0, 0, 0.7);
+  color: #9f9;
+  font: 11px ui-monospace, monospace;
   pointer-events: none;
 }

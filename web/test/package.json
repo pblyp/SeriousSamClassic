@@ -6,7 +6,9 @@
     "smoke": "node smoke.mjs",
     "persistence": "node persistence.mjs",
     "ownfiles": "node ownfiles.mjs",
-    "test": "node smoke.mjs && node persistence.mjs && node ownfiles.mjs"
+    "test": "node smoke.mjs && node persistence.mjs && node ownfiles.mjs && node touch.mjs && node mobile.mjs",
+    "touch": "node touch.mjs",
+    "mobile": "node mobile.mjs"
   },
   "devDependencies": {
     "playwright": "^1.50.0"

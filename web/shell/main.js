@@ -8,6 +8,8 @@
 //   args=...   extra command line, e.g. args=+level%20Levels/KarnakDemo.wld
 //   exec=...   console commands to run after startup, e.g. exec=snd_iFormat=1;
 //   build=jspi|asyncify  force a build instead of picking one by browser support
+//   touch=auto|on|off    touch screen controls (otherwise as chosen on the page)
+//   touchdebug           show what the touch controls receive
 
 (() => {
   const params = new URLSearchParams(location.search);
@@ -22,8 +24,11 @@
   const folderInput = document.getElementById('folder');
   const ownFilesLabel = document.getElementById('own-files');
   const startButton = document.getElementById('start');
-  const fullscreenButton = document.getElementById('fullscreen');
+  const fullscreenCheckbox = document.getElementById('fullscreen');
   const logEl = document.getElementById('log');
+  const touchSelect = document.getElementById('touch-mode');
+  const helpKeyboard = document.getElementById('help-keyboard');
+  const helpTouch = document.getElementById('help-touch');
 
   const showLog = params.has('log');
   logEl.hidden = !showLog;
@@ -53,6 +58,7 @@
   }
 
   function showError(text) {
+    PageFullscreen.exit();
     overlay.hidden = false;
     chooseEl.hidden = true;
     loadingEl.hidden = false;
@@ -69,6 +75,53 @@
     }
     return (typeof WebAssembly.Suspending === 'function') ? 'jspi' : 'asyncify';
   }
+
+  // ---------------------------------------------------------------- touch controls
+
+  // options are remembered in this browser (storage may be unavailable, e.g. in private windows)
+  function loadOption(name) {
+    try {
+      return localStorage.getItem(name);
+    } catch (e) {
+      return null;
+    }
+  }
+  function saveOption(name, value) {
+    try {
+      localStorage.setItem(name, value);
+    } catch (e) {
+      // not remembered, fine
+    }
+  }
+
+  function loadTouchMode() {
+    const forced = params.get('touch');
+    if (forced === 'on' || forced === 'off' || forced === 'auto') {
+      return forced;
+    }
+    return loadOption('touchControls') || 'auto';
+  }
+
+  function updateTouchHelp() {
+    const touch = TouchControls.wanted(touchSelect.value);
+    helpKeyboard.hidden = touch;
+    helpTouch.hidden = !touch;
+  }
+
+  touchSelect.value = loadTouchMode();
+  updateTouchHelp();
+  touchSelect.addEventListener('change', () => {
+    saveOption('touchControls', touchSelect.value);
+    updateTouchHelp();
+  });
+
+  // fullscreen when starting; by default on touch screens, where the browser's bars take a lot of room
+  const savedFullscreen = loadOption('fullscreen');
+  fullscreenCheckbox.checked = savedFullscreen !== null
+    ? savedFullscreen === 'true'
+    : TouchControls.wanted('auto');
+  fullscreenCheckbox.addEventListener('change', () => saveOption('fullscreen', fullscreenCheckbox.checked));
+  document.getElementById('fullscreen-option').hidden = !PageFullscreen.supported;
 
   // ---------------------------------------------------------------- player's files
 
@@ -190,7 +243,15 @@
     }
     started = true;
     overlay.hidden = true;
-    fullscreenButton.hidden = false;
+    // (the browser only allows this while handling a click)
+    if (fullscreenCheckbox.checked && !params.has('autostart')) {
+      PageFullscreen.enter();
+    }
+    if (TouchControls.wanted(touchSelect.value)) {
+      document.documentElement.classList.add('touch');
+      TouchControls.create(Module, canvas, document.getElementById('game'), { debug: params.has('touchdebug') });
+      log('Touch controls on');
+    }
     canvas.focus();
     const args = engineArguments();
     log(`Starting with arguments: ${args.join(' ')}`);
@@ -245,7 +306,6 @@
       ready();
     },
     onExit() {
-      fullscreenButton.hidden = true;
       // a fatal error is printed to the console before the game exits
       const iError = engineLog.lastIndexOf('FatalError:');
       if (iError >= 0) {
@@ -255,7 +315,6 @@
       }
     },
     onAbort(what) {
-      fullscreenButton.hidden = true;
       showError(`The game crashed: ${what}`);
     },
   };
@@ -333,16 +392,6 @@
     useFiles(await entriesFromDrop(e.dataTransfer));
   });
 
-  fullscreenButton.addEventListener('click', () => {
-    document.documentElement.requestFullscreen().catch(() => {});
-  });
-  // the button would be in the way while playing
-  function updateFullscreenButton() {
-    fullscreenButton.hidden = !started || document.pointerLockElement !== null || document.fullscreenElement !== null;
-  }
-  document.addEventListener('pointerlockchange', updateFullscreenButton);
-  document.addEventListener('fullscreenchange', updateFullscreenButton);
-
   // the game saves its settings when the page is hidden (it may be closed without warning)
   function requestSave() {
     if (!started) {
@@ -372,15 +421,22 @@
   document.addEventListener('keydown', resumeAudio, true);
 
   // requestPointerLock() returns a promise that rejects when the browser refuses
-  // (e.g. right after the user pressed Escape); the game just asks again later
+  // (e.g. right after the user pressed Escape); the game just asks again later.
+  // With touch controls the mouse is never captured: there may be none, and it
+  // could take the touches away from the controls.
   const browserRequestPointerLock = Element.prototype.requestPointerLock;
-  Element.prototype.requestPointerLock = function (...args) {
-    const result = browserRequestPointerLock.apply(this, args);
-    if (result && typeof result.catch === 'function') {
-      result.catch(() => {});
-    }
-    return result;
-  };
+  if (browserRequestPointerLock) {
+    Element.prototype.requestPointerLock = function (...args) {
+      if (document.documentElement.classList.contains('touch')) {
+        return Promise.resolve();
+      }
+      const result = browserRequestPointerLock.apply(this, args);
+      if (result && typeof result.catch === 'function') {
+        result.catch(() => {});
+      }
+      return result;
+    };
+  }
 
   if (params.has('autostart')) {
     load('demo-data.js');

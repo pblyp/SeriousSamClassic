@@ -9,7 +9,6 @@
 <body>
 <div id="game">
   <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
-  <button id="fullscreen" type="button" title="Fullscreen" hidden>&#x26F6;</button>
   <div id="overlay">
     <div id="panel">
       <h1>Serious Sam</h1>
@@ -24,6 +23,16 @@
         </label>
         <p class="note">Pick (or drop here) the folder where <em>The First Encounter</em> is installed.<br>
           The files stay on this computer.</p>
+        <div class="options">
+          <label class="option">Touch controls
+            <select id="touch-mode">
+              <option value="auto">Automatic</option>
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <label class="option" id="fullscreen-option"><input id="fullscreen" type="checkbox"> Fullscreen</label>
+        </div>
       </div>
 
       <div id="loading" hidden>
@@ -32,11 +41,14 @@
         <button id="start" class="primary" type="button" hidden>Start</button>
       </div>
 
-      <p class="help">Click the game to use the mouse &middot; <kbd>Esc</kbd> menu &middot; <kbd>~</kbd> console</p>
+      <p class="help" id="help-keyboard">Click the game to use the mouse &middot; <kbd>Esc</kbd> menu &middot; <kbd>~</kbd> console &middot; <kbd>F11</kbd> fullscreen</p>
+      <p class="help" id="help-touch" hidden>Left thumb moves &middot; drag on the right to look &middot; tap menus</p>
     </div>
   </div>
 </div>
 <pre id="log" hidden></pre>
+<script src="fullscreen.js"></script>
+<script src="touch.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

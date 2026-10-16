@@ -65,6 +65,59 @@ CTString Web_TakeCommands(void)
   return strCommands;
 }
 
+EM_JS(int, web_get_touch_input, (UBYTE *pubButtons, int ctButtons, float *pfLook), {
+  const t = Module['webTouch'];
+  if (!t) {
+    HEAPU8.fill(0, pubButtons, pubButtons + ctButtons);
+    HEAPF32[pfLook >> 2] = 0;
+    HEAPF32[(pfLook >> 2) + 1] = 0;
+    return 0;
+  }
+  for (let i = 0; i < ctButtons; i++) {
+    HEAPU8[pubButtons + i] = t.buttons[i] ? 1 : 0;
+  }
+  HEAPF32[pfLook >> 2] = t.lookX;
+  HEAPF32[(pfLook >> 2) + 1] = t.lookY;
+  t.lookX = 0;
+  t.lookY = 0;
+  const iWheel = t.wheel;
+  t.wheel = 0;
+  return iWheel;
+});
+
+void Web_GetTouchInput(UBYTE aubButtons[WTB_COUNT], FLOAT &fLookX, FLOAT &fLookY, INDEX &iWheel)
+{
+  float afLook[2];
+  iWheel = web_get_touch_input(aubButtons, WTB_COUNT, afLook);
+  fLookX = afLook[0];
+  fLookY = afLook[1];
+}
+
+EM_JS(int, web_take_key_press, (), {
+  const aKeys = Module['webKeyPresses'];
+  return (aKeys && aKeys.length) ? aKeys.shift() : 0;
+});
+
+INDEX Web_TakeKeyPress(void)
+{
+  return web_take_key_press();
+}
+
+EM_JS(void, web_set_game_input, (int bGameInput), {
+  Module['webGameInput'] = !!bGameInput;
+  if (Module['onWebGameInput']) {
+    Module['onWebGameInput'](!!bGameInput);
+  }
+});
+
+void Web_SetGameInput(BOOL bGameInput)
+{
+  static INDEX _iLast = -1;
+  if (_iLast == (INDEX)bGameInput) return;
+  _iLast = bGameInput;
+  web_set_game_input(bGameInput);
+}
+
 static double _dLastYield = 0;
 
 // frame timing statistics (printed when web_bFrameStats is set)

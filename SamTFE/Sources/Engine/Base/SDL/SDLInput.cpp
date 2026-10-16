@@ -27,6 +27,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Engine/Base/Console.h>
 #include <Engine/Base/Synchronization.h>
 #include <Engine/Base/SDL/SDLEvents.h>
+#ifdef PLATFORM_EMSCRIPTEN
+#include <Engine/Base/CTString.h>
+#include <Engine/Base/Emscripten/WebPlatform.h>
+#endif
 #include <Engine/Base/Shell.h>
 #include <Engine/Base/ErrorReporting.h>
 
@@ -774,6 +778,25 @@ void CInput::GetInput(BOOL bPreScan)
   SDL_GetRelativeMouseState(&iMx, &iMy);
   mouse_relative_x = iMx;
   mouse_relative_y = iMy;
+  #ifdef PLATFORM_EMSCRIPTEN
+  // the page's touch screen controls act as keys and mouse with the default controls
+  {
+    UBYTE aubTouch[WTB_COUNT];
+    FLOAT fLookX, fLookY;
+    INDEX iWheel;
+    Web_GetTouchInput(aubTouch, fLookX, fLookY, iWheel);
+    if (!bPreScan) {
+      static const INDEX aiTouchKIDs[WTB_COUNT] = {
+        KID_W, KID_S, KID_A, KID_D, KID_SPACE, KID_C, KID_MOUSE1, KID_MOUSE2 };
+      for (INDEX i=0; i<WTB_COUNT; i++) {
+        if (aubTouch[i]) inp_ubButtonsBuffer[aiTouchKIDs[i]] = 0xFF;
+      }
+    }
+    mouse_relative_x += (int)fLookX;
+    mouse_relative_y += (int)fLookY;
+    _iMouseZ += iWheel * MOUSE_SCROLL_INTERVAL;
+  }
+  #endif
   #else
   if ((mouse_relative_x != 0) || (mouse_relative_y != 0)) 
   #endif

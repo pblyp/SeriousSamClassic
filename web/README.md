@@ -23,7 +23,7 @@ from archive.org, extracts them (`fetch_demo_data.sh`) and packages the data
 `web/build/dist` is a static site: serve it with any web server, e.g.
 
 ```sh
-node web/test/server.mjs 8080      # or: python3 -m http.server -d web/build/dist
+node web/test/server.mjs 8080      # add 0.0.0.0 to serve other devices on the network
 ```
 
 and open <http://localhost:8080/>. The `.wasm` (about 4 MB) and `.data` files
@@ -48,6 +48,11 @@ compress well; let the server use brotli or gzip.
   Settings are saved whenever the page is hidden, since a tab can be closed at any time.
 - **Size.** The game renders at the size of the canvas (`web_fMaxPixelRatio`, 2 by
   default, limits the resolution on high density displays).
+- **Touch screens.** `shell/touch.js` adds on screen controls (on by default on touch
+  screens, or chosen on the start page): a joystick under the left thumb, dragging on the
+  right to look, and buttons. The engine reads them every frame (`Web_GetTouchInput()`)
+  as the keys and mouse of the default controls (W/A/S/D, Space, C, mouse buttons and
+  wheel). In menus, NETRICSA and demos they hide, and taps work as mouse clicks.
 
 Platform specific code is under `#ifdef PLATFORM_EMSCRIPTEN`.
 
@@ -62,6 +67,8 @@ Platform specific code is under `#ifdef PLATFORM_EMSCRIPTEN`.
 | `args=+level%20Levels/KarnakDemo.wld` | command line |
 | `exec=snd_iFormat=2;` | console commands to run at startup |
 | `build=jspi` or `build=asyncify` | force a build |
+| `touch=on`, `off` or `auto` | touch screen controls |
+| `touchdebug` | show what the touch controls receive (for problems on devices) |
 
 From the browser's console, `Module.webCommands = ['some_command;']` runs console
 commands in the running game. `web_bFrameStats=1;` prints frame timing.
@@ -74,6 +81,8 @@ npm test              # all of the following
 node smoke.mjs        # plays Karnak in Chromium (both builds), Firefox and WebKit
 node persistence.mjs  # settings survive reloading the page
 node ownfiles.mjs     # "Use my game files" with the demo folder
+node touch.mjs        # touch screen controls (--size 844x390 for a phone)
+node mobile.mjs       # phone players' path on an emulated Android phone and iPhone
 node run.mjs --args "+level Levels/KarnakDemo.wld" --seconds 30 --shots 10,20 --out /tmp/shots
 node demo-frames.mjs --frames 30,90 --native <native>/ScreenShots   # compare with a native build
 ```

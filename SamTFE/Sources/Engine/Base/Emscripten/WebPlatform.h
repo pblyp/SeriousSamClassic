@@ -31,4 +31,20 @@ ENGINE_API BOOL Web_SaveRequested(void);
 // console commands that the page queued for the game (empty if none)
 ENGINE_API CTString Web_TakeCommands(void);
 
+// touch screen controls of the page (web/shell/touch.js), in the same order there
+enum WebTouchButton {
+  WTB_FORWARD, WTB_BACKWARD, WTB_LEFT, WTB_RIGHT,
+  WTB_JUMP, WTB_CROUCH, WTB_FIRE, WTB_USE,
+  WTB_COUNT
+};
+// get the state of the touch buttons, and the look movement (in pixels) and
+// weapon changes (+1 previous, -1 next) since the last call
+ENGINE_API void Web_GetTouchInput(UBYTE aubButtons[WTB_COUNT], FLOAT &fLookX, FLOAT &fLookY, INDEX &iWheel);
+
+// next key (SDL key code) pressed with the page's on screen buttons, or 0
+ENGINE_API INDEX Web_TakeKeyPress(void);
+
+// tell the page whether the game is taking input (playing), or menus are up
+ENGINE_API void Web_SetGameInput(BOOL bGameInput);
+
 #endif  /* include-once check. */
