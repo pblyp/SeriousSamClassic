@@ -179,7 +179,8 @@
       return el;
     }
     tapButton('tc-escape', 'Esc', () => Module.webKeyPresses.push(KEY_ESCAPE));
-    if (PageFullscreen.supported) {
+    // (fullscreen.js may have been blocked, see main.js)
+    if (window.PageFullscreen && PageFullscreen.supported) {
       tapButton('tc-fullscreen', '\u26F6', () => PageFullscreen.toggle());
     }
     tapButton('tc-weapon-prev', '▲', () => { state.wheel += 1; });

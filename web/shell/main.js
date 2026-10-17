@@ -28,6 +28,10 @@
 
 (() => {
   const params = new URLSearchParams(location.search);
+  // fullscreen.js, or nothing if it couldn't be loaded (content blockers may block a
+  // script with "fullscreen" in its name): the game works without it
+  const PageFullscreen = window.PageFullscreen
+    || { supported: false, active: () => false, enter() {}, exit() {}, toggle() {} };
 
   const canvas = document.getElementById('canvas');
   const overlay = document.getElementById('overlay');
