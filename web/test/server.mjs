@@ -91,9 +91,14 @@ export function serve(port = 0, root = DIST, host = '127.0.0.1') {
         'Cache-Control': 'no-cache',
         'Accept-Ranges': 'bytes',
       };
-      // parts of files, as WebTorrent asks its web seed for (like GitHub Pages does)
+      // parts of files, as WebTorrent asks its web seed for (like GitHub Pages does,
+      // which refuses ranges of empty files)
       const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
-      if (range && st.size > 0) {
+      if (req.headers.range && st.size === 0) {
+        res.writeHead(416, { 'Content-Range': 'bytes */0' }).end();
+        return;
+      }
+      if (range) {
         let start = range[1] === '' ? st.size - Number(range[2]) : Number(range[1]);
         let end = range[1] === '' || range[2] === '' ? st.size - 1 : Math.min(Number(range[2]), st.size - 1);
         start = Math.max(start, 0);

@@ -45,9 +45,12 @@ python3 "$FILE_PACKAGER" base-data.data --preload "$BASE_DIR@/data" \
 # the demo's files as they are (each one is well below GitHub Pages' 100 MB limit),
 # without what the browser version doesn't use: the recorded demos and the intro
 # flyover that played behind the menu (it starts in the menu); Demos/Default.ini stays,
-# for demos that players record themselves
+# for demos that players record themselves. Also without empty files (placeholders the
+# game doesn't need): GitHub Pages answers a request for part of an empty file with an
+# error (416), which the torrent's web seed does when it falls inside a piece, and the
+# download never finished
 rm -f demo-data.data demo-data.js
-rsync -a --delete --delete-excluded --exclude '.DS_Store' \
+rsync -a --delete --delete-excluded --min-size=1 --exclude '.DS_Store' \
   --exclude '/Demos/[Aa]uto-[Dd]emo*' --exclude '/Levels/Intro.wld' \
   "$DEMO_DIR/" "$OUT_DIR/demo/"
 if [ "$WEB_DIR/tools/package-lock.json" -nt "$WEB_DIR/tools/node_modules/.package-lock.json" ]; then

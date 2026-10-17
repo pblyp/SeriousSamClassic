@@ -194,9 +194,10 @@
             askSite(peers ? 'other players are too slow' : 'no other players found');
           }
         }
-        // (pieces arriving, or being verified from IndexedDB on a later visit; while only
-        // other players are asked, waiting for them isn't a stall)
-        const activity = torrent.received + torrent.downloaded;
+        // (pieces verified: arriving, or from IndexedDB on a later visit; not just bytes
+        // received, as pieces that keep failing are received again and again; while
+        // only other players are asked, waiting for them isn't a stall)
+        const activity = torrent.downloaded;
         if (activity !== lastActivity || torrent.progress === 1 || !siteAsked) {
           lastActivity = activity;
           lastProgressTime = now;

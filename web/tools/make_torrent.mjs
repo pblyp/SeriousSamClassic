@@ -59,7 +59,7 @@ function walk(dir, prefix) {
     const rel = prefix ? `${prefix}/${name}` : name;
     if (fs.statSync(full).isDirectory()) {
       walk(full, rel);
-    } else if (!name.startsWith('.')) {  // (left out of the torrent too)
+    } else if (!name.startsWith('.') && fs.statSync(full).size > 0) {  // (left out of the torrent too)
       files.push({ path: rel, length: fs.statSync(full).size });
     }
   }
