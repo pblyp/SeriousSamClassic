@@ -588,8 +588,10 @@
         p2p: p2pSelect.value !== 'none',
         trackers: trackers ? trackers.split(',') : null,
         log,
-        onProgress(fraction, peers) {
-          const from = peers > 0 ? ` (with ${peers} other player${peers > 1 ? 's' : ''})` : '';
+        onProgress(fraction, peers, waitLeft) {
+          const from = peers > 0 ? ` (with ${peers} other player${peers > 1 ? 's' : ''})`
+            // (the site is only asked when no other players can do it)
+            : waitLeft !== null && waitLeft !== undefined && fraction < 1 ? ` (looking for other players: ${waitLeft} s)` : '';
           setStatus(`Downloading game data… ${Math.round(fraction * 100)}%${from}`, fraction);
         },
       });

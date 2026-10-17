@@ -77,7 +77,9 @@ All files are well below Pages' 100 MB limit (the largest is the demo's 54 MB
 - **Demo download.** `shell/demo-download.js` gets the demo with
   [WebTorrent](https://webtorrent.io): from other players who have the page open
   (found through public WebSocket trackers, connected with WebRTC), and from the site,
-  whose `demo/` files are the torrent's web seed. The pieces are kept in IndexedDB, so
+  whose `demo/` files are the torrent's web seed. The site is only asked when no other
+  players are found within 15 s, or they give less than 1 MB/s, which keeps the site's
+  bandwidth (GitHub Pages: 100 GB a month) for those who need it. The pieces are kept in IndexedDB, so
   later visits download nothing, and the page shares them (at most 1 MB/s) while the game
   runs. If WebTorrent can't be used, the files are downloaded one by one. The start page's
   *Connection type* chooses how, for this and for network games (remembered in the browser):
@@ -196,6 +198,7 @@ node netplay-browsers.mjs  # network games over WebRTC between WebKit, Firefox a
 node escape.mjs       # Escape with the mouse captured (opens a browser window; not part of npm test)
 node run.mjs --args "+level Levels/KarnakDemo.wld" --seconds 30 --shots 10,20 --out /tmp/shots
 node demo-frames.mjs --frames 30,90 --native <native>/ScreenShots   # compare with a native build
+                      # (needs the recorded demos, which the packaged demo leaves out)
 ```
 
 `run.mjs` also profiles (`--profile 20,30`, use `--build asyncify`: Chrome doesn't

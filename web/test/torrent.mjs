@@ -52,6 +52,13 @@ const written = (page) => page.waitForFunction(() => window.engineLog.some((l) =
   .then(() => page.evaluate(() => window.written));
 const DEMO_BYTES = JSON.parse(fs.readFileSync(new URL('../build/dist/demo-torrent.json', import.meta.url)))
   .files.reduce((sum, file) => sum + file.length, 0);
+// "Demo data ready (X MB downloaded, Y MB of it from the site)" -> [X, Y] (or null)
+function downloaded(line) {
+  const m = /\((\d+\.\d) MB downloaded, (\d+\.\d) MB of it from the site\)/.exec(line);
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+// (all of the demo: at least its size, rounded as the page logs it)
+const isWholeDemo = (mb) => mb >= Number((DEMO_BYTES / 1048576).toFixed(1));
 const readyLine = async (page) => (await engineLog(page)).find((l) => l.startsWith('Demo data ready')) || '';
 
 // 1. from the site, then from IndexedDB
@@ -64,7 +71,9 @@ const readyLine = async (page) => (await engineLog(page)).find((l) => l.startsWi
   await page.reload();
   await waitForLog(page, 'Demo data ready');
   const second = await readyLine(page);
-  results[`first visit downloads from the site (${first})`] = /\((10[0-9]\.\d) MB downloaded, \1 MB of it from the site\)/.test(first) && firstRequests > 0;
+  const [firstTotal, firstFromSite] = downloaded(first) || [];
+  results[`first visit downloads from the site (${first})`] = isWholeDemo(firstTotal) && firstFromSite === firstTotal
+    && firstRequests > 0;
   results[`next visit downloads nothing (${second}, ${page.demoRequests} requests)`] = second.includes('(0.0 MB downloaded') && page.demoRequests === 0;
   await page.context().close();
 }
@@ -102,7 +111,8 @@ if (!await webRtcWorks()) {
   const leecher = await openPage(query, { blockDemoFiles: true });
   await waitForLog(leecher, 'Demo data ready', 180000);
   const line = await readyLine(leecher);
-  results[`another player shares the demo (${line})`] = /\(10[0-9]\.\d MB downloaded, 0\.0 MB of it from the site\)/.test(line);
+  const [total, fromSite] = downloaded(line) || [];
+  results[`another player shares the demo (${line})`] = isWholeDemo(total) && fromSite === 0;
   results['the second player got all the files'] = await written(leecher) === DEMO_BYTES;
   await seeder.context().close();
   await leecher.context().close();

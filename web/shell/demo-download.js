@@ -3,7 +3,9 @@
 // Downloads the demo's game files.
 //
 // With WebTorrent: from other players who have the page open, and from this site,
-// which serves the same files (demo/...) as the torrent's web seed. The pieces are
+// which serves the same files (demo/...) as the torrent's web seed. The site is only
+// asked when other players can't do it (none found within PEER_WAIT_MS, or too slow),
+// which keeps the site's bandwidth (GitHub Pages: 100 GB a month) for those who need it. The pieces are
 // kept in IndexedDB, so the next visit doesn't download anything, and the page
 // keeps sharing them with other players while the game runs.
 //
@@ -16,6 +18,11 @@
   const STALL_MS = 20000;
   // how fast this page shares the demo with other players while the game runs
   const UPLOAD_LIMIT = 1024 * 1024;
+  // how long to look for other players before the site is asked too, and how fast they
+  // must be (and for how long they may be slower) for the site not to be asked
+  const PEER_WAIT_MS = 15000;
+  const PEER_SPEED_ENOUGH = 1024 * 1024;
+  const PEER_SLOW_MS = 5000;
 
   function request(req) {
     return new Promise((resolve, reject) => {
@@ -149,19 +156,51 @@
       const torrent = client.add(torrentFile, { announce: p2p ? trackers : [], store: IdbChunkStore });
       torrent.on('error', fail);
       torrent.on('warning', (err) => log(`WebTorrent: ${err.message || err}`));
-      torrent.once('metadata', () => torrent.addWebSeed(seed));
 
       let lastActivity = -1;
       let lastProgressTime = performance.now();
+
+      // the site as a source: right away without other players, else when they don't do
+      let haveMetadata = false;
+      let siteAsked = false;
+      let slowSince = 0;
+      const lookingSince = performance.now();
+      const askSite = (why) => {
+        if (siteAsked || settled || !haveMetadata) return;
+        siteAsked = true;
+        log(`Demo download: from the site too (${why})`);
+        torrent.addWebSeed(seed);
+        // (the stall check starts now)
+        lastProgressTime = performance.now();
+      };
+      torrent.once('metadata', () => {
+        haveMetadata = true;
+        if (!p2p) askSite('not from other players');
+      });
+
       timer = setInterval(() => {
+        const now = performance.now();
         const peers = torrent.wires.filter((wire) => wire.type !== 'webSeed').length;
-        onProgress(torrent.progress || 0, peers);
-        // (pieces arriving, or being verified from IndexedDB on a later visit)
+        // (seconds left before the site is asked, while looking for other players)
+        const waitLeft = siteAsked ? null : Math.max(0, Math.ceil((PEER_WAIT_MS - (now - lookingSince)) / 1000));
+        onProgress(torrent.progress || 0, peers, waitLeft);
+        if (!siteAsked && torrent.progress < 1) {
+          if (torrent.downloadSpeed >= PEER_SPEED_ENOUGH) {
+            slowSince = 0;
+          } else if (!slowSince) {
+            slowSince = now;
+          }
+          if (now - lookingSince >= PEER_WAIT_MS && slowSince && now - slowSince >= Math.min(PEER_SLOW_MS, now - lookingSince)) {
+            askSite(peers ? 'other players are too slow' : 'no other players found');
+          }
+        }
+        // (pieces arriving, or being verified from IndexedDB on a later visit; while only
+        // other players are asked, waiting for them isn't a stall)
         const activity = torrent.received + torrent.downloaded;
-        if (activity !== lastActivity || torrent.progress === 1) {
+        if (activity !== lastActivity || torrent.progress === 1 || !siteAsked) {
           lastActivity = activity;
-          lastProgressTime = performance.now();
-        } else if (performance.now() - lastProgressTime > STALL_MS) {
+          lastProgressTime = now;
+        } else if (now - lastProgressTime > STALL_MS) {
           fail(new Error('the download stalled'));
         }
       }, 250);
@@ -212,7 +251,8 @@
   // the demo's files as [{ path, size, read() -> Promise<ArrayBuffer> }]
   //   p2p:        also get them from (and share them with) other players
   //   trackers:   trackers to find other players with (default: the ones the build lists)
-  //   onProgress: called with (fraction done, number of other players connected)
+  //   onProgress: called with (fraction done, number of other players connected, seconds
+  //               left before the site is asked too, or null once it is)
   async function download({ p2p = true, trackers = null, onProgress = () => {}, log = () => {} } = {}) {
     const info = await (await fetchOk('demo-torrent.json')).json();
     if (navigator.storage && navigator.storage.persist) {
