@@ -39,6 +39,7 @@ function parseArgs(argv) {
       case '--size': [opts.width, opts.height] = next().split('x').map(Number); break;
       case '--profile': opts.profile = next().split(',').map(Number); break;
       case '--glstats': opts.glstats = true; break;
+      case '--p2p': opts.p2p = true; break;
       // input at given times, e.g. "10:press:Escape,12:down:KeyW,14:up:KeyW,15:click,16:move:100:0"
       case '--actions': opts.actions = next().split(',').map((a) => a.split(':')); break;
       case '--trace': opts.trace = next().split(',').map(Number); break;
@@ -108,7 +109,8 @@ export async function runGame(opts) {
     }
   });
 
-  const query = new URLSearchParams({ autostart: '1' });
+  // the demo from the local web seed only, unless --p2p (public trackers)
+  const query = new URLSearchParams({ autostart: '1', p2p: opts.p2p ? '1' : '0' });
   if (opts.args) query.set('args', opts.args);
   if (opts.exec) query.set('exec', opts.exec);
   if (opts.build) query.set('build', opts.build);

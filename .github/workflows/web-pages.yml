@@ -1,0 +1,85 @@
+name: Web version (GitHub Pages)
+
+# Builds The First Encounter for the web (web/build.sh) and publishes it with
+# GitHub Pages. In the repository's settings, Pages → Source must be "GitHub Actions".
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "web-port" ]
+    paths: [ "SamTFE/**", "web/**", ".github/workflows/web-pages.yml" ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  EMSDK_VERSION: 6.0.12
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install build tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build flex bison 7zip rsync \
+          libsdl2-dev zlib1g-dev libogg-dev libvorbis-dev
+
+    # (with the ports emscripten builds on first use: SDL2, ogg, vorbis)
+    - name: Cache emsdk
+      uses: actions/cache@v4
+      with:
+        path: emsdk
+        key: emsdk-${{ env.EMSDK_VERSION }}-${{ runner.os }}
+
+    - name: Install emsdk
+      run: |
+        [ -d emsdk ] || git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+        cd emsdk
+        ./emsdk install "$EMSDK_VERSION"
+        ./emsdk activate "$EMSDK_VERSION"
+
+    # the demo and the patch, from archive.org (checked against web/demo_data.sha256)
+    - name: Cache demo download
+      uses: actions/cache@v4
+      with:
+        path: web/build/downloads
+        key: demo-${{ hashFiles('web/demo_data.sha256') }}
+
+    - name: Configure Pages
+      id: pages
+      uses: actions/configure-pages@v5
+
+    - name: Build
+      run: |
+        source emsdk/emsdk_env.sh
+        SITE_URL="${{ steps.pages.outputs.base_url }}/" web/build.sh Release
+
+    - name: Check file sizes
+      run: |
+        # GitHub Pages can't serve files over 100 MB
+        big=$(find web/build/dist -type f -size +95M)
+        if [ -n "$big" ]; then echo "Too big for GitHub Pages: $big"; exit 1; fi
+        du -sh web/build/dist
+
+    - uses: actions/upload-pages-artifact@v3
+      with:
+        path: web/build/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+    - id: deployment
+      uses: actions/deploy-pages@v4

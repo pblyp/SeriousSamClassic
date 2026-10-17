@@ -40,7 +40,7 @@ for (const run of runs) {
   page.on('pageerror', (e) => errors.push(e.stack || e.message));
   const results = {};
   try {
-    await page.goto(`${server.url}/index.html?args=${encodeURIComponent('+level Levels/KarnakDemo.wld')}`);
+    await page.goto(`${server.url}/index.html?p2p=0&args=${encodeURIComponent('+level Levels/KarnakDemo.wld')}`);
     await page.tap('#play-demo');
     await page.waitForSelector('#start:not([hidden])', { timeout: 180000 });
     await page.tap('#start');

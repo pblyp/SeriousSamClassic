@@ -139,6 +139,28 @@ static Uint8 *sdl_backbuffer = NULL;
 static volatile SLONG sdl_backbuffer_pos = 0;
 static volatile SLONG sdl_backbuffer_remain = 0;
 static SDL_AudioDeviceID sdl_audio_device = 0;
+#ifdef PLATFORM_EMSCRIPTEN
+// how much mixed sound is kept ready for the browser, which is how far sound lags behind
+// (the game mixes every frame there, so a fraction of the ring buffer is enough)
+static SLONG sdl_backbuffer_target = 0;
+// for web_bFrameStats: buffered sound when mixing, and how often the browser found none
+static SLONG sdl_slBytesPerSecond = 1;
+static double sdl_dBufferedSum = 0;
+static SLONG sdl_slBufferedMin = 0x7fffffff;
+static INDEX sdl_ctBufferedSamples = 0;
+static INDEX sdl_ctUnderruns = 0;
+
+void Web_GetAudioStats(FLOAT &fAverageMs, FLOAT &fMinMs, INDEX &ctUnderruns)
+{
+  fAverageMs = sdl_ctBufferedSamples>0 ? FLOAT(1000.0*sdl_dBufferedSum/sdl_ctBufferedSamples/sdl_slBytesPerSecond) : 0.0f;
+  fMinMs = sdl_ctBufferedSamples>0 ? FLOAT(1000.0*sdl_slBufferedMin/sdl_slBytesPerSecond) : 0.0f;
+  ctUnderruns = sdl_ctUnderruns;
+  sdl_dBufferedSum = 0;
+  sdl_slBufferedMin = 0x7fffffff;
+  sdl_ctBufferedSamples = 0;
+  sdl_ctUnderruns = 0;
+}
+#endif
 
 static void sdl_audio_callback(void *userdata, Uint8 *stream, int len)
 {
@@ -193,6 +215,9 @@ static void sdl_audio_callback(void *userdata, Uint8 *stream, int len)
   if (len > 0) {
       ASSERT(sdl_backbuffer_remain == 0);
       memset(stream, sdl_silence, len);
+#ifdef PLATFORM_EMSCRIPTEN
+      sdl_ctUnderruns++;
+#endif
   } // if
 } // sdl_audio_callback
 
@@ -243,6 +268,10 @@ static BOOL StartUp_SDLaudio( CSoundLibrary &sl, BOOL bReport=TRUE)
     desired.samples = 2048;
   else
     desired.samples = 4096;  // (*shrug*)
+#ifdef PLATFORM_EMSCRIPTEN
+  // the browser's audio node buffers this much (twice) on top of what is mixed ahead
+  desired.samples = (desired.freq <= 22050) ? 512 : 1024;
+#endif
 
   desired.channels = sl.sl_SwfeFormat.nChannels;
   desired.userdata = &sl;
@@ -264,6 +293,10 @@ static BOOL StartUp_SDLaudio( CSoundLibrary &sl, BOOL bReport=TRUE)
   sdl_backbuffer = (Uint8 *)AllocMemory(sdl_backbuffer_allocation);
   sdl_backbuffer_remain = 0;
   sdl_backbuffer_pos = 0;
+#ifdef PLATFORM_EMSCRIPTEN
+  sdl_backbuffer_target = obtained.size * 3;
+  sdl_slBytesPerSecond = sl.sl_SwfeFormat.nSamplesPerSec * sl.sl_SwfeFormat.nChannels * sl.sl_SwfeFormat.wBitsPerSample/8;
+#endif
 
   // report success
   if( bReport) {
@@ -334,7 +367,16 @@ static SLONG PrepareSoundBuffer_SDLaudio( CSoundLibrary &sl)
 {
   ASSERT(sdl_backbuffer_remain >= 0);
   ASSERT(sdl_backbuffer_remain <= sdl_backbuffer_allocation);
+#ifdef PLATFORM_EMSCRIPTEN
+  sdl_dBufferedSum += sdl_backbuffer_remain;
+  if (sdl_backbuffer_remain < sdl_slBufferedMin) sdl_slBufferedMin = sdl_backbuffer_remain;
+  sdl_ctBufferedSamples++;
+  // mix whole stereo samples only
+  SLONG slFree = sdl_backbuffer_target - sdl_backbuffer_remain;
+  return slFree > 0 ? (slFree & ~3) : 0;
+#else
   return(sdl_backbuffer_allocation - sdl_backbuffer_remain);
+#endif
 } // PrepareSoundBuffer_SDLaudio
 
 

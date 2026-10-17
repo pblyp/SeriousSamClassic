@@ -15,6 +15,8 @@ const TYPES = {
   '.wasm': 'application/wasm',
   '.data': 'application/octet-stream',
   '.png': 'image/png',
+  '.json': 'application/json',
+  '.torrent': 'application/x-bittorrent',
 };
 
 export function serve(port = 0, root = DIST, host = '127.0.0.1') {
@@ -30,11 +32,26 @@ export function serve(port = 0, root = DIST, host = '127.0.0.1') {
         res.writeHead(404).end('not found');
         return;
       }
-      res.writeHead(200, {
+      const headers = {
         'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream',
-        'Content-Length': st.size,
         'Cache-Control': 'no-cache',
-      });
+        'Accept-Ranges': 'bytes',
+      };
+      // parts of files, as WebTorrent asks its web seed for (like GitHub Pages does)
+      const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+      if (range && st.size > 0) {
+        let start = range[1] === '' ? st.size - Number(range[2]) : Number(range[1]);
+        let end = range[1] === '' || range[2] === '' ? st.size - 1 : Math.min(Number(range[2]), st.size - 1);
+        start = Math.max(start, 0);
+        if (start > end) {
+          res.writeHead(416, { 'Content-Range': `bytes */${st.size}` }).end();
+          return;
+        }
+        res.writeHead(206, { ...headers, 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${st.size}` });
+        fs.createReadStream(file, { start, end }).pipe(res);
+        return;
+      }
+      res.writeHead(200, { ...headers, 'Content-Length': st.size });
       fs.createReadStream(file).pipe(res);
     });
   });

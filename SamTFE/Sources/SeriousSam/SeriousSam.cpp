@@ -48,6 +48,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "CmdLine.h"
 #include "Credits.h"
 #ifdef PLATFORM_EMSCRIPTEN
+#include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 #endif
 
@@ -1638,6 +1639,8 @@ int SubMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int 
     // the page shows touch controls only while playing (in menus and demos, taps are clicks)
     Web_SetGameInput(_pInput->IsInputEnabled()
       && _gmRunningGameMode!=GM_NONE && _gmRunningGameMode!=GM_DEMO && _gmRunningGameMode!=GM_INTRO);
+    // mix sound every frame (not only every timer tick), so little has to be mixed ahead
+    _pSound->MixSounds();
     // the browser paces the frames
     Web_WaitFrame();
 #else
@@ -1946,11 +1949,19 @@ static void WebSaveSettings(void)
 static void WebCheckPointerLock(void)
 {
   static BOOL _bWasLocked = FALSE;
+  static double _dLockedSince = 0;
   EmscriptenPointerlockChangeEvent ple;
   if (emscripten_get_pointerlock_status(&ple) != EMSCRIPTEN_RESULT_SUCCESS) return;
   const BOOL bLocked = ple.isActive;
+  const double dNow = emscripten_get_now();
+  if (bLocked && !_bWasLocked) {
+    _dLockedSince = dNow;
+  }
+  // (not when the game just got the Escape that closed the menu, and the browser took
+  // away the lock it got right after that: the menu would come back at once)
   if (_bWasLocked && !bLocked && _pInput->IsInputEnabled() && !bMenuActive
-   && _pGame->gm_csConsoleState==CS_OFF && _pGame->gm_csComputerState==CS_OFF) {
+   && _pGame->gm_csConsoleState==CS_OFF && _pGame->gm_csComputerState==CS_OFF
+   && dNow-_dLockedSince > 500 && Web_TimeSinceEscape() > 500) {
     StartMenus();
   }
   _bWasLocked = bLocked;

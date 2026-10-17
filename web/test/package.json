@@ -6,11 +6,13 @@
     "smoke": "node smoke.mjs",
     "persistence": "node persistence.mjs",
     "ownfiles": "node ownfiles.mjs",
-    "test": "node smoke.mjs && node persistence.mjs && node ownfiles.mjs && node touch.mjs && node mobile.mjs",
+    "test": "node smoke.mjs && node persistence.mjs && node ownfiles.mjs && node touch.mjs && node mobile.mjs && node torrent.mjs",
     "touch": "node touch.mjs",
-    "mobile": "node mobile.mjs"
+    "mobile": "node mobile.mjs",
+    "torrent": "node torrent.mjs"
   },
   "devDependencies": {
+    "bittorrent-tracker": "^11.2.3",
     "playwright": "^1.50.0"
   }
 }

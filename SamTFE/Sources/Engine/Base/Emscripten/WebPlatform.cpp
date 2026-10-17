@@ -93,6 +93,30 @@ void Web_GetTouchInput(UBYTE aubButtons[WTB_COUNT], FLOAT &fLookX, FLOAT &fLookY
   fLookY = afLook[1];
 }
 
+EM_JS(void, web_get_touch_move, (float *pfMove), {
+  const t = Module['webTouch'];
+  HEAPF32[pfMove >> 2] = t ? t.moveX : 0;
+  HEAPF32[(pfMove >> 2) + 1] = t ? t.moveY : 0;
+});
+
+void Web_GetTouchMove(FLOAT &fX, FLOAT &fY)
+{
+  float afMove[2];
+  web_get_touch_move(afMove);
+  fX = afMove[0];
+  fY = afMove[1];
+}
+
+EM_JS(float, web_time_since_escape, (), {
+  const t = Module['webLastEscape'];
+  return t === undefined ? 1e9 : performance.now() - t;
+});
+
+FLOAT Web_TimeSinceEscape(void)
+{
+  return web_time_since_escape();
+}
+
 EM_JS(int, web_take_key_press, (), {
   const aKeys = Module['webKeyPresses'];
   return (aKeys && aKeys.length) ? aKeys.shift() : 0;
@@ -140,9 +164,13 @@ void Web_WaitFrame(void)
     if (dWork > _dMaxWork) _dMaxWork = dWork;
     _ctStatFrames++;
     if (dAfter - _dStatsStart > 5000) {
-      CPrintF("frames: %d in %.0fms, work avg %.1fms max %.1fms, wait avg %.1fms, sleep %.0fms\n",
+      FLOAT fAudioAvg, fAudioMin;
+      INDEX ctUnderruns;
+      Web_GetAudioStats(fAudioAvg, fAudioMin, ctUnderruns);
+      CPrintF("frames: %d in %.0fms, work avg %.1fms max %.1fms, wait avg %.1fms, sleep %.0fms, "
+        "audio buffered avg %.0fms min %.0fms, underruns %d\n",
         _ctStatFrames, dAfter-_dStatsStart, _dWorkTime/_ctStatFrames, _dMaxWork,
-        _dWaitTime/_ctStatFrames, _dWebSleepTime);
+        _dWaitTime/_ctStatFrames, _dWebSleepTime, fAudioAvg, fAudioMin, ctUnderruns);
       _dStatsStart = dAfter;
       _dWorkTime = _dWaitTime = _dMaxWork = _dWebSleepTime = 0;
       _ctStatFrames = 0;

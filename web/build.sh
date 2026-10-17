@@ -3,7 +3,7 @@
 #
 #   web/build.sh [Release|RelWithDebInfo|Debug] [jspi|asyncify|all]
 #
-# Needs an activated emsdk (source <emsdk>/emsdk_env.sh), cmake, ninja, flex and bison.
+# Needs an activated emsdk (source <emsdk>/emsdk_env.sh), cmake, ninja, flex, bison and node.
 # The demo data is fetched and packaged on the first run (see fetch_demo_data.sh).
 set -euo pipefail
 
@@ -44,13 +44,13 @@ for variant in $VARIANTS; do
   cp "$out/serioussam.js" "$out/serioussam.wasm" "$DIST_DIR/$variant/"
 done
 
-# 3. the page and the demo data
+# 3. the page and the demo data (SITE_URL: where the site will be, for demo.torrent's web seed)
 cp "$WEB_DIR/shell/"* "$DIST_DIR/"
-if [ ! -f "$DIST_DIR/demo-data.data" ] || [ ! -f "$DIST_DIR/base-data.data" ]; then
+if [ ! -f "$DIST_DIR/demo-page.torrent" ] || [ ! -f "$DIST_DIR/base-data.data" ]; then
   if [ ! -d "$BUILD_DIR/demo-data" ]; then
     "$WEB_DIR/fetch_demo_data.sh"
   fi
-  "$WEB_DIR/package_demo.sh" "$DIST_DIR"
+  "$WEB_DIR/package_demo.sh" "$DIST_DIR" "${SITE_URL:-}"
 fi
 
 echo "Built into $DIST_DIR"

@@ -1,5 +1,6 @@
-// Plays with the touch screen controls: closes NETRICSA with a tap, walks with
-// the joystick, looks around, shoots, and opens the menu with the Esc button.
+// Checks the touch screen controls on their own (analog stick, taps as the mouse),
+// then plays with them: closes NETRICSA with a tap, walks with the joystick, looks
+// around, shoots, and opens the menu with the Esc button.
 //
 //   node touch.mjs [--out dir] [--size 844x390]
 
@@ -36,7 +37,42 @@ await shot('0-start-page');
 const option = await page.inputValue('#touch-mode');
 const touchHelp = await page.isVisible('#help-touch');
 
-await page.goto(`${server.url}/index.html?autostart=1&args=${encodeURIComponent('+level Levels/KarnakDemo.wld')}`);
+// the controls without the game: a stand-in Module records what they do
+await page.evaluate(() => {
+  document.getElementById('overlay').hidden = true;
+  const canvas = document.getElementById('canvas');
+  window.fake = { webGameInput: false, mouse: [] };
+  for (const type of ['mousedown', 'mouseup']) canvas.addEventListener(type, () => fake.mouse.push(type));
+  TouchControls.create(fake, canvas, document.getElementById('game'));
+});
+const mouseEvents = () => page.evaluate(() => fake.mouse.join(' '));
+// a tap in a menu that starts the game ends while playing (iOS); taps must still work afterwards
+await touch('touchStart', [[W / 2, H / 2, 1]]);
+await wait(100);
+await page.evaluate(() => fake.onWebGameInput(true));
+await touch('touchEnd', []);
+await page.evaluate(() => fake.onWebGameInput(false));
+await touch('touchStart', [[W / 2, H / 2, 2]]);
+await wait(100);
+await touch('touchEnd', []);
+await wait(200);
+const tapsAfterPlaying = await mouseEvents();
+// the stick is analog: a short push walks, a full one runs
+await page.evaluate(() => fake.onWebGameInput(true));
+const move = () => page.evaluate(() => [fake.webTouch.moveX, fake.webTouch.moveY].map((v) => Math.round(v * 100) / 100));
+await touch('touchStart', [[150, H * 0.7, 1]]);
+await touch('touchMove', [[150, H * 0.7 - 28, 1]]);
+const halfMove = await move();
+await touch('touchMove', [[150, H * 0.7 - 100, 1]]);
+const fullMove = await move();
+// past the rim the stick follows the thumb, so coming back reverses at once
+await touch('touchMove', [[150, H * 0.7 - 100 + 56, 1]]);
+const backMove = await move();
+await touch('touchEnd', []);
+const releasedMove = await move();
+
+await page.goto('about:blank');
+await page.goto(`${server.url}/index.html?autostart=1&p2p=0&args=${encodeURIComponent('+level Levels/KarnakDemo.wld')}`);
 await page.waitForFunction(() => window.engineLog.some((l) => l.includes('Adding player')), null, { timeout: 120000 });
 await wait(4000);
 await shot('1-netricsa');
@@ -91,6 +127,10 @@ server.close();
 
 const results = {
   'touch controls are on by default on a touch screen': option === 'auto' && touchHelp,
+  [`taps work after a tap that started the game (${tapsAfterPlaying})`]: tapsAfterPlaying === 'mousedown mouseup mousedown mouseup',
+  [`stick is analog (${halfMove} / ${fullMove} / ${backMove} / ${releasedMove})`]:
+    halfMove[0] === 0 && halfMove[1] < -0.3 && halfMove[1] > -0.5 && fullMove[1] === -1
+    && backMove[1] === 0 && releasedMove[1] === 0,
   'controls hidden while NETRICSA is up': controlsHiddenInMenu,
   'tapping Exit closed NETRICSA': playing,
   'Esc button opened the menu': menu,

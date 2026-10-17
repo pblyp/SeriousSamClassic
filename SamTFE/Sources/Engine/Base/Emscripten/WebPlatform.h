@@ -32,6 +32,7 @@ ENGINE_API BOOL Web_SaveRequested(void);
 ENGINE_API CTString Web_TakeCommands(void);
 
 // touch screen controls of the page (web/shell/touch.js), in the same order there
+// (the page moves with an analog stick, see Web_GetTouchMove(), not with the movement buttons)
 enum WebTouchButton {
   WTB_FORWARD, WTB_BACKWARD, WTB_LEFT, WTB_RIGHT,
   WTB_JUMP, WTB_CROUCH, WTB_FIRE, WTB_USE,
@@ -40,9 +41,18 @@ enum WebTouchButton {
 // get the state of the touch buttons, and the look movement (in pixels) and
 // weapon changes (+1 previous, -1 next) since the last call
 ENGINE_API void Web_GetTouchInput(UBYTE aubButtons[WTB_COUNT], FLOAT &fLookX, FLOAT &fLookY, INDEX &iWheel);
+// position of the touch move stick: -1..1 from left to right and from forward to backward
+ENGINE_API void Web_GetTouchMove(FLOAT &fX, FLOAT &fY);
 
 // next key (SDL key code) pressed with the page's on screen buttons, or 0
 ENGINE_API INDEX Web_TakeKeyPress(void);
+
+// sound kept ready for the browser since the last call (average and minimum),
+// and how many times the browser found none
+ENGINE_API void Web_GetAudioStats(FLOAT &fAverageMs, FLOAT &fMinMs, INDEX &ctUnderruns);
+
+// milliseconds since the page last saw the Escape key (pressed or released), a large number if never
+ENGINE_API FLOAT Web_TimeSinceEscape(void);
 
 // tell the page whether the game is taking input (playing), or menus are up
 ENGINE_API void Web_SetGameInput(BOOL bGameInput);

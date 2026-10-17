@@ -10,6 +10,8 @@
 //   build=jspi|asyncify  force a build instead of picking one by browser support
 //   touch=auto|on|off    touch screen controls (otherwise as chosen on the page)
 //   touchdebug           show what the touch controls receive
+//   p2p=0                download the demo only from this site, not from other players
+//   trackers=wss://...   trackers (comma separated) for finding other players
 
 (() => {
   const params = new URLSearchParams(location.search);
@@ -125,8 +127,9 @@
 
   // ---------------------------------------------------------------- player's files
 
-  // files of the player's installation: [{ path: 'Levels/...', file: File }]
-  let userFiles = null;
+  // game files to copy into /data before the game starts (the demo's, or the player's):
+  // [{ path: 'Levels/...', size, read() -> Promise<ArrayBuffer> }]
+  let dataFiles = null;
 
   // things in an installation the web version doesn't need
   function isNeeded(path) {
@@ -192,19 +195,19 @@
     return entries;
   }
 
-  // copy the player's files into the game's file system, over the base files
-  async function writeUserFiles() {
+  // copy the game files into the game's file system (over the base files, if any)
+  async function writeDataFiles() {
     const FS = Module.FS;
-    const totalBytes = userFiles.reduce((sum, { file }) => sum + file.size, 0);
+    const totalBytes = dataFiles.reduce((sum, { size }) => sum + size, 0);
     let doneBytes = 0;
-    for (const { path, file } of userFiles) {
-      setStatus(`Reading your game files… ${Math.round(100 * doneBytes / totalBytes)}%`, doneBytes / totalBytes);
+    for (const { path, size, read } of dataFiles) {
+      setStatus(`Preparing the game files… ${Math.round(100 * doneBytes / totalBytes)}%`, doneBytes / totalBytes);
       const fullPath = `/data/${path}`;
       FS.mkdirTree(fullPath.slice(0, fullPath.lastIndexOf('/')));
-      FS.writeFile(fullPath, new Uint8Array(await file.arrayBuffer()));
-      doneBytes += file.size;
+      FS.writeFile(fullPath, new Uint8Array(await read()));
+      doneBytes += size;
     }
-    log(`Copied ${userFiles.length} game files (${Math.round(totalBytes / 1048576)} MB)`);
+    log(`Copied ${dataFiles.length} game files (${Math.round(totalBytes / 1048576)} MB)`);
   }
 
   // ---------------------------------------------------------------- engine
@@ -267,11 +270,11 @@
 
   async function ready() {
     try {
-      if (userFiles) {
-        await writeUserFiles();
+      if (dataFiles) {
+        await writeDataFiles();
       }
     } catch (e) {
-      showError(`Cannot read your game files: ${e.message}`);
+      showError(`Cannot read the game files: ${e.message}`);
       return;
     }
     setStatus('Ready', 1);
@@ -331,8 +334,8 @@
 
   let loading = false;
 
-  // load a data package and the engine
-  async function load(dataScript) {
+  // get the game data ready, then load the engine
+  async function load(prepareData) {
     if (loading) {
       return;
     }
@@ -343,27 +346,45 @@
     const build = pickBuild();
     log(`Using the ${build} build`);
     try {
-      // the data package registers itself with Module before the engine starts
-      await loadScript(dataScript);
+      await prepareData();
       await loadScript(`${build}/serioussam.js`);
     } catch (e) {
       showError(e.message);
     }
   }
 
+  // the demo comes from other players and this site (see demo-download.js)
+  function loadDemo() {
+    load(async () => {
+      const trackers = params.get('trackers');
+      dataFiles = await DemoDownload.download({
+        p2p: params.get('p2p') !== '0',
+        trackers: trackers ? trackers.split(',') : null,
+        log,
+        onProgress(fraction, peers) {
+          const from = peers > 0 ? ` (with ${peers} other player${peers > 1 ? 's' : ''})` : '';
+          setStatus(`Downloading game data… ${Math.round(fraction * 100)}%${from}`, fraction);
+        },
+      });
+    });
+  }
+
   function useFiles(entries) {
+    let files;
     try {
-      userFiles = selectGameFiles(entries);
+      files = selectGameFiles(entries);
     } catch (e) {
       chooseEl.querySelector('.note:last-of-type').textContent = e.message;
       return;
     }
-    load('base-data.js');
+    dataFiles = files.map(({ path, file }) => ({ path, size: file.size, read: () => file.arrayBuffer() }));
+    // the data package registers itself with Module before the engine starts
+    load(() => loadScript('base-data.js'));
   }
 
   // ---------------------------------------------------------------- page events
 
-  playDemoButton.addEventListener('click', () => load('demo-data.js'));
+  playDemoButton.addEventListener('click', loadDemo);
   startButton.addEventListener('click', start);
 
   ownFilesLabel.addEventListener('keydown', (e) => {
@@ -420,6 +441,19 @@
   document.addEventListener('pointerdown', resumeAudio, true);
   document.addEventListener('keydown', resumeAudio, true);
 
+  // the game asks for the mouse when the menu closes; when Escape closed it, the browser
+  // would take the mouse right back (Escape ends pointer lock), and the game would take
+  // that for Escape pressed while playing. So it is asked for once Escape is left alone.
+  const ESCAPE_LOCK_DELAY_MS = 500;
+  let lockRetry = 0;
+  for (const type of ['keydown', 'keyup']) {
+    document.addEventListener(type, (e) => {
+      if (e.key === 'Escape' && window.Module) {
+        Module.webLastEscape = performance.now();
+      }
+    }, true);
+  }
+
   // requestPointerLock() returns a promise that rejects when the browser refuses
   // (e.g. right after the user pressed Escape); the game just asks again later.
   // With touch controls the mouse is never captured: there may be none, and it
@@ -428,6 +462,16 @@
   if (browserRequestPointerLock) {
     Element.prototype.requestPointerLock = function (...args) {
       if (document.documentElement.classList.contains('touch')) {
+        return Promise.resolve();
+      }
+      const sinceEscape = window.Module ? performance.now() - (Module.webLastEscape ?? -Infinity) : Infinity;
+      if (sinceEscape < ESCAPE_LOCK_DELAY_MS) {
+        clearTimeout(lockRetry);
+        lockRetry = setTimeout(() => {
+          if (Module.webGameInput && !document.pointerLockElement) {
+            this.requestPointerLock(...args);
+          }
+        }, ESCAPE_LOCK_DELAY_MS - sinceEscape);
         return Promise.resolve();
       }
       const result = browserRequestPointerLock.apply(this, args);
@@ -439,6 +483,6 @@
   }
 
   if (params.has('autostart')) {
-    load('demo-data.js');
+    loadDemo();
   }
 })();

@@ -766,6 +766,15 @@ void CControls::CreateAction(const CPlayerCharacter &pc, CPlayerAction &paAction
   paAction.pa_vTranslation(1) = -GetAxisValue( AXIS_MOVE_LR);
   paAction.pa_vTranslation(2) = GetAxisValue( AXIS_MOVE_UD);
   paAction.pa_vTranslation(3) = -GetAxisValue( AXIS_MOVE_FB);
+#ifdef PLATFORM_EMSCRIPTEN
+  // the touch screen move stick is an analog axis (scaled by the player's speeds)
+  if (_pInput->IsInputEnabled()) {
+    FLOAT fTouchX, fTouchY;
+    Web_GetTouchMove(fTouchX, fTouchY);
+    paAction.pa_vTranslation(1) += fTouchX;
+    paAction.pa_vTranslation(3) += fTouchY;
+  }
+#endif
   // set axis-controlled rotation
   paAction.pa_aRotation(1) = (ANGLE)-GetAxisValue( AXIS_TURN_LR);
   paAction.pa_aRotation(2) = (ANGLE)GetAxisValue( AXIS_TURN_UD);
