@@ -107,64 +107,6 @@
 
   const stripRoot = (path) => path.replace(/^demo\//, '');
 
-  // SHA-1 of bytes (for browsers without crypto.subtle, see provideSha1())
-  function sha1(bytes) {
-    let h0 = 0x67452301, h1 = 0xEFCDAB89, h2 = 0x98BADCFE, h3 = 0x10325476, h4 = 0xC3D2E1F0;
-    const w = new Int32Array(80);
-    const block = (data, offset) => {
-      for (let i = 0; i < 16; i++) {
-        const o = offset + 4 * i;
-        w[i] = (data[o] << 24) | (data[o + 1] << 16) | (data[o + 2] << 8) | data[o + 3];
-      }
-      for (let i = 16; i < 80; i++) {
-        const x = w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16];
-        w[i] = (x << 1) | (x >>> 31);
-      }
-      let a = h0, b = h1, c = h2, d = h3, e = h4;
-      for (let i = 0; i < 80; i++) {
-        let f, k;
-        if (i < 20) { f = (b & c) | (~b & d); k = 0x5A827999; }
-        else if (i < 40) { f = b ^ c ^ d; k = 0x6ED9EBA1; }
-        else if (i < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8F1BBCDC; }
-        else { f = b ^ c ^ d; k = 0xCA62C1D6; }
-        const t = (((a << 5) | (a >>> 27)) + f + e + k + w[i]) | 0;
-        e = d; d = c; c = (b << 30) | (b >>> 2); b = a; a = t;
-      }
-      h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0; h4 = (h4 + e) | 0;
-    };
-    const n = bytes.length;
-    const whole = n - (n % 64);
-    for (let offset = 0; offset < whole; offset += 64) block(bytes, offset);
-    // the rest, a 1 bit, zeros, and the length in bits
-    const tail = new Uint8Array(n % 64 < 56 ? 64 : 128);
-    tail.set(bytes.subarray(whole));
-    tail[n - whole] = 0x80;
-    const tailView = new DataView(tail.buffer);
-    tailView.setUint32(tail.length - 8, Math.floor(n / 0x20000000));
-    tailView.setUint32(tail.length - 4, (n * 8) >>> 0);
-    for (let offset = 0; offset < tail.length; offset += 64) block(tail, offset);
-    const out = new DataView(new ArrayBuffer(20));
-    [h0, h1, h2, h3, h4].forEach((h, i) => out.setUint32(4 * i, h));
-    return out.buffer;
-  }
-
-  // browsers only have crypto.subtle on https and localhost; on other http addresses
-  // (e.g. a computer on the local network) WebTorrent gets the SHA-1 it needs from here
-  function provideSha1() {
-    if (!window.crypto || crypto.subtle) return;
-    const digest = async (algorithm, data) => {
-      const name = (algorithm.name || algorithm).toUpperCase();
-      if (name !== 'SHA-1') {
-        throw new Error(`${name} is not available on this address (http)`);
-      }
-      const bytes = ArrayBuffer.isView(data)
-        ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-        : new Uint8Array(data);
-      return sha1(bytes);
-    };
-    Object.defineProperty(crypto, 'subtle', { configurable: true, value: { digest } });
-  }
-
   // WebTorrent's module asks for the origin's private file system when it loads, and
   // doesn't handle that failing (in private windows); it isn't used here (pieces go to
   // IndexedDB), so such a failure is kept from becoming an error on the page
@@ -183,7 +125,10 @@
   }
 
   async function downloadWithWebTorrent(info, { p2p, trackers, onProgress, log }) {
-    provideSha1();
+    // (WebTorrent checks pieces with crypto.subtle, which browsers only have on https and localhost)
+    if (!window.crypto.subtle) {
+      throw new Error('it needs this page on https');
+    }
     const WebTorrent = await importWebTorrent();
     const torrentFile = new Uint8Array(await (await fetchOk('demo-page.torrent')).arrayBuffer());
     const client = new WebTorrent({ tracker: p2p ? {} : false, dht: false, lsd: false, utPex: p2p });
@@ -281,5 +226,5 @@
     }
   }
 
-  window.DemoDownload = { download, client: null, sha1 };
+  window.DemoDownload = { download, client: null };
 })();

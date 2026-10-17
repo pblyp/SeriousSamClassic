@@ -31,6 +31,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <Engine/GameAgent/GameAgent.h>
 
+#ifdef PLATFORM_EMSCRIPTEN
+// in the browser, packets travel over WebRTC instead of a UDP socket
+#include <Engine/Base/Emscripten/WebNet.h>
+#endif
+
 #ifdef PLATFORM_WIN32
 typedef int socklen_t;
 #pragma comment(lib, "wsock32.lib")
@@ -194,7 +199,12 @@ CTString AddressToString(ULONG ulHost)
   struct hostent *hostentry = NULL;
 
   // if DNS lookup is allowed
+#ifdef PLATFORM_EMSCRIPTEN
+  // (other players have made up addresses in the browser)
+  if (FALSE) {
+#else
   if (net_bLookupHostNames) {
+#endif
     // lookup the host
 	  hostentry = gethostbyaddr ((char *)&ulHostNet, sizeof(ulHostNet), AF_INET);
   }
@@ -369,6 +379,11 @@ void CCommunicationInterface::PrepareForUse(BOOL bUseNetwork, BOOL bClient)
       }
     }
 
+#ifdef PLATFORM_EMSCRIPTEN
+    // (no addresses of its own in the browser)
+    cm_strName = "browser";
+    cm_strAddress = "WebRTC";
+#else
     // if no valid desired local address
     CPrintF(TRANSV("  getting local addresses\n"));
     // get default
@@ -393,6 +408,7 @@ void CCommunicationInterface::PrepareForUse(BOOL bUseNetwork, BOOL bClient)
         cm_strAddress += inet_ntoa(*(const in_addr *)phe->h_addr_list[i]);
       }
     }
+#endif
 
     CPrintF(TRANSV("  local addresses: %s (%s)\n"), (const char *) cm_strName, (const char *) cm_strAddress);
     CPrintF(TRANSV("  port: %d\n"), net_iPort);
@@ -418,12 +434,19 @@ void CCommunicationInterface::Unprepare(void)
 {
   // close winsock
   if (cci_bWinSockOpen) {
+#ifdef PLATFORM_EMSCRIPTEN
+    if (cci_bSocketOpen) {
+      Web_Net_Close();
+      cci_bSocketOpen = FALSE;
+    }
+#else
 		// if socket is open
 		if (cci_hSocket != INVALID_SOCKET) {
 			// close it
 			closesocket(cci_hSocket);
 			cci_hSocket = INVALID_SOCKET;
 		}
+#endif
 
     cm_ciBroadcast.Clear();
     EndWinsock();
@@ -540,6 +563,15 @@ CTString CCommunicationInterface::GetSocketError(INDEX iError)
 // open an UDP socket at given port
 void CCommunicationInterface::OpenSocket_t(ULONG ulLocalHost, ULONG ulLocalPort)
 {
+#ifdef PLATFORM_EMSCRIPTEN
+  // the server (with a port) opens a room for others to join; a client joins one later
+  if (!Web_Net_Open(ulLocalPort!=0)) {
+    ThrowF_t(TRANS("Network games are not available on this page."));
+  }
+  cci_bBound = ulLocalPort!=0;
+  cci_bSocketOpen = TRUE;
+  return;
+#endif
   // create the socket as UDP
   CreateSocket_t();
   // bind it to that address/port
@@ -845,6 +877,19 @@ BOOL CCommunicationInterface::Server_Update()
 
 	// if not just playing single player
 	if (cci_bServerInitialized) {
+#ifdef PLATFORM_EMSCRIPTEN
+		// a player whose connection is gone has left (with UDP, that is only noticed
+		// after net_tmDisconnectTimeout)
+		for (ULONG ulGone = Web_Net_TakeDeparted(); ulGone != 0; ulGone = Web_Net_TakeDeparted()) {
+			for (INDEX iGone=1; iGone<SERVER_CLIENTS; iGone++) {
+				if (cm_aciClients[iGone].ci_bUsed && cm_aciClients[iGone].ci_adrAddress.adr_ulAddress == ulGone) {
+					CPrintF(TRANSV("Server: Client '%s' disconnected (connection closed).\n"), (const char *) AddressToString(ulGone));
+					Server_ClearClient(iGone);
+					_pNetwork->ga_srvServer.HandleClientDisconected(iGone);
+				}
+			}
+		}
+#endif
 		Broadcast_Update_t();
 		// for each client transfer packets from the output buffer to the master output buffer
 		for (iClient=1; iClient<SERVER_CLIENTS; iClient++) {
@@ -952,12 +997,21 @@ void CCommunicationInterface::Client_Init_t(char* strServerName)
   ASSERT(cci_bInitialized);
   ASSERT(!cci_bClientInitialized);
 
+#ifdef PLATFORM_EMSCRIPTEN
+  // in the browser, the server is found by the code of its room
+  CTString strError;
+  ULONG ulServerAddress = Web_Net_Join(strServerName, strError);
+  if (ulServerAddress==0) {
+    ThrowF_t("%s", (const char *) strError);
+  }
+#else
   // retrieve server address from server name
   ULONG ulServerAddress = StringToAddress(strServerName);
   // if lookup failed
   if (ulServerAddress==INADDR_NONE) {
     ThrowF_t(TRANS("Host '%s' not found!\n"), strServerName);
   }
+#endif
 
   // call client init with server address
   Client_Init_t(ulServerAddress);
@@ -1200,6 +1254,14 @@ BOOL CCommunicationInterface::Client_Update(void)
 
 	// if not playing on the server (i.e. connectet to a remote server)
 	if (!cci_bServerInitialized) {
+#ifdef PLATFORM_EMSCRIPTEN
+		// the server's connection is gone: the game is over for this player
+		for (ULONG ulGone = Web_Net_TakeDeparted(); ulGone != 0; ulGone = Web_Net_TakeDeparted()) {
+			if (cm_ciLocalClient.ci_bUsed && cm_ciLocalClient.ci_adrAddress.adr_ulAddress == ulGone) {
+				cm_ciLocalClient.ci_bUsed = FALSE;
+			}
+		}
+#endif
 		// put all pending packets in the master output buffer
 		while (cm_ciLocalClient.ci_pbOutputBuffer.pb_ulNumOfPackets > 0) {
 			ppaPacket = cm_ciLocalClient.ci_pbOutputBuffer.PeekFirstPacket();
@@ -1290,6 +1352,15 @@ void CCommunicationInterface::UpdateMasterBuffers()
 
 			// initially, nothing is done
 			bSomethingDone = FALSE;
+#ifdef PLATFORM_EMSCRIPTEN
+			// (nothing received is like a socket that would block)
+			slSizeReceived = Web_Net_Receive(aub, MAX_PACKET_SIZE, adrIncomingAddress.adr_ulAddress, adrIncomingAddress.adr_uwPort);
+			tvNow = _pTimer->GetHighPrecisionTimer();
+			if (slSizeReceived < 0) {
+				slSizeReceived = SOCKET_ERROR;
+			}
+			if (slSizeReceived == SOCKET_ERROR) {
+#else
 			slSizeReceived = recvfrom(cci_hSocket,(char*)aub,MAX_PACKET_SIZE,0,(SOCKADDR *)&sa,&size);
 			tvNow = _pTimer->GetHighPrecisionTimer();
 
@@ -1307,6 +1378,7 @@ void CCommunicationInterface::UpdateMasterBuffers()
 						return;
 					}
 				}
+#endif
 
 			// if block received
 			} else {
@@ -1349,7 +1421,13 @@ void CCommunicationInterface::UpdateMasterBuffers()
     sa.sin_addr.s_addr = htonl(ppaNewPacket->pa_adrAddress.adr_ulAddress);
     sa.sin_port = htons(ppaNewPacket->pa_adrAddress.adr_uwPort);
 		
+#ifdef PLATFORM_EMSCRIPTEN
+    Web_Net_Send(ppaNewPacket->pa_adrAddress.adr_ulAddress, ppaNewPacket->pa_adrAddress.adr_uwPort,
+      ppaNewPacket->pa_pubPacketData, ppaNewPacket->pa_slSize);
+    slSizeSent = ppaNewPacket->pa_slSize;
+#else
     slSizeSent = sendto(cci_hSocket, (char*) ppaNewPacket->pa_pubPacketData, (int) ppaNewPacket->pa_slSize, 0, (SOCKADDR *)&sa, sizeof(sa));
+#endif
     cci_bBound = TRUE;   // UDP socket that did a send is considered bound
 		tvNow = _pTimer->GetHighPrecisionTimer();
 

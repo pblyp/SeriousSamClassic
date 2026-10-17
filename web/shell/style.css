@@ -302,6 +302,103 @@ html.touch, html.touch body, html.touch #canvas {
   border-radius: 4px;
   padding: 0.25rem 0.4rem;
 }
+.about {
+  margin-top: 1rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  text-align: left;
+}
+.about summary {
+  cursor: pointer;
+  text-align: center;
+}
+.about p {
+  margin: 0.6rem 0 0;
+}
+.about strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+.link-button {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: normal;
+  letter-spacing: normal;
+  text-transform: none;
+  min-width: 0;
+  padding: 0.2rem 0.4rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-button:hover {
+  color: var(--fg);
+}
+.purge-row {
+  margin: 1rem 0 0;
+}
+#error-hint {
+  margin: 0.75rem 0 1rem;
+}
+#error-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.75rem;
+  margin: 0.5rem 0 0;
+}
+#start-over {
+  margin-top: 1.25rem;
+}
+/* network games: the room to share (netplay.js) */
+#net-badge {
+  position: absolute;
+  left: 50%;
+  top: 40px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100vw - 32px);
+  padding: 0.35rem 0.5rem 0.35rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--fg);
+  font: 14px system-ui, sans-serif;
+  z-index: 2;
+}
+#net-badge.error {
+  border-color: #c0392b;
+}
+#net-badge button {
+  font: inherit;
+  font-size: 0.8rem;
+  min-width: 0;
+  padding: 0.25rem 0.6rem;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+}
+#net-badge #net-hide {
+  border: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  padding: 0 0.3rem;
+}
+.invite {
+  margin: 0 0 1.25rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 0.9rem;
+}
 .tc-debug {
   position: absolute;
   left: 50%;

@@ -2039,6 +2039,24 @@ void CGame::LoadPlayersAndControls( void)
     LoadPlayer(gm_apcPlayers[iPlayer], iPlayer);
   }
 
+#ifdef PLATFORM_EMSCRIPTEN
+  // players made by earlier versions all got the same GUIDs (see GetGUID()), so other
+  // players wouldn't tell them apart in network games: give them new ones, once
+  const CTFileName fnmRenewed = CTString("Players\\RandomGUIDs.txt");
+  if (!FileExists(fnmRenewed)) {
+    for (INDEX iPlayer=0; iPlayer<8; iPlayer++) {
+      gm_apcPlayers[iPlayer].RenewGUID();
+    }
+    try {
+      CTFileStream strm;
+      strm.Create_t(fnmRenewed);
+      strm.PutLine_t("Player GUIDs are random since this file was made.");
+    } catch (const char *strError) {
+      CPrintF("%s\n", strError);
+    }
+  }
+#endif
+
   SavePlayersAndControls();
 }
 

@@ -144,7 +144,9 @@ procedures:
               
             // this is a very ugly fix for cooperative not finishing in the demo level
             // remove this when not needed any more!!!!
-            if(_SE_DEMO && GetSP()->sp_bCooperative && !GetSP()->sp_bSinglePlayer) {
+            // (also in builds that run the demo's level without being demo builds)
+            if((_SE_DEMO || GetWorld()->wo_fnmFileName.FileName()=="KarnakDemo")
+              && GetSP()->sp_bCooperative && !GetSP()->sp_bSinglePlayer) {
               if (m_strName=="Appear gold amon") {
                 CPlayer *penPlayer = (CPlayer*)&*ePass.penOther;
                 penPlayer->SetGameEnd();

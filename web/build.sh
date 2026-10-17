@@ -46,6 +46,11 @@ done
 
 # 3. the page and the demo data (SITE_URL: where the site will be, for demo.torrent's web seed)
 cp "$WEB_DIR/shell/"* "$DIST_DIR/"
+# the page's libraries (WebTorrent, Trystero)
+if [ "$WEB_DIR/tools/package-lock.json" -nt "$WEB_DIR/tools/node_modules/.package-lock.json" ]; then
+  (cd "$WEB_DIR/tools" && npm ci --ignore-scripts --no-audit --no-fund >/dev/null)
+fi
+node "$WEB_DIR/tools/build_libs.mjs" "$DIST_DIR"
 if [ ! -f "$DIST_DIR/demo-page.torrent" ] || [ ! -f "$DIST_DIR/base-data.data" ]; then
   if [ ! -d "$BUILD_DIR/demo-data" ]; then
     "$WEB_DIR/fetch_demo_data.sh"

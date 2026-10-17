@@ -21,12 +21,20 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Engine/Base/Emscripten/WebPlatform.h>
 
 // waits for the next animation frame, or until the page wakes the game up
-// (animation frames stop while the page is hidden)
+// (animation frames stop while the page is hidden; in a network game the others
+// still need this one, so then it goes on with timers)
 EM_ASYNC_JS(void, web_wait_animation_frame, (), {
   await new Promise((resolve) => {
-    const id = requestAnimationFrame(() => resolve());
+    let cancel;
+    if (document.hidden && Module['netplay'] && Module['netplay'].active) {
+      const id = setTimeout(resolve, 16);
+      cancel = () => clearTimeout(id);
+    } else {
+      const id = requestAnimationFrame(() => resolve());
+      cancel = () => cancelAnimationFrame(id);
+    }
     Module['webWakeUp'] = () => {
-      cancelAnimationFrame(id);
+      cancel();
       resolve();
     };
   });

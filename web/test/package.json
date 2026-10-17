@@ -6,13 +6,18 @@
     "smoke": "node smoke.mjs",
     "persistence": "node persistence.mjs",
     "ownfiles": "node ownfiles.mjs",
-    "test": "node smoke.mjs && node persistence.mjs && node ownfiles.mjs && node touch.mjs && node mobile.mjs && node torrent.mjs",
+    "test": "node smoke.mjs && node persistence.mjs && node ownfiles.mjs && node touch.mjs && node mobile.mjs && node torrent.mjs && node netplay.mjs && node netplay-browsers.mjs",
     "touch": "node touch.mjs",
     "mobile": "node mobile.mjs",
-    "torrent": "node torrent.mjs"
+    "torrent": "node torrent.mjs",
+    "netplay": "node netplay.mjs",
+    "netplay-browsers": "node netplay-browsers.mjs"
   },
   "devDependencies": {
+    "@trystero-p2p/ws-relay": "^0.25.4",
     "bittorrent-tracker": "^11.2.3",
-    "playwright": "^1.50.0"
+    "node-turn": "^0.0.6",
+    "playwright": "^1.50.0",
+    "ws": "^8.18.3"
   }
 }

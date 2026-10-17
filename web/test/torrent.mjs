@@ -5,7 +5,7 @@
 //     can't connect, e.g. behind some VPNs)
 //  3. without WebTorrent, file by file
 //  4. from an http address that isn't localhost (like a computer on the local network),
-//     where browsers have no crypto.subtle
+//     where browsers have no crypto.subtle (which WebTorrent needs): directly
 //
 //   node torrent.mjs
 
@@ -119,12 +119,14 @@ if (!await webRtcWorks()) {
 
 // 4. from an address on the local network
 {
-  const page = await openPage('p2p=0', { origin: server.url.replace('127.0.0.1', 'sam.test') });
+  const page = await openPage(`connection=secure&trackers=${encodeURIComponent(trackerUrl)}`,
+    { origin: server.url.replace('127.0.0.1', 'sam.test') });
   const bytes = await written(page);
   const log = await engineLog(page);
+  const line = log.find((l) => /Demo data ready|WebTorrent failed/.test(l));
   const insecure = await page.evaluate(() => !isSecureContext);
-  results[`works over plain http (${log.find((l) => /Demo data ready|WebTorrent failed/.test(l))})`] =
-    insecure && log.some((l) => l.startsWith('Demo data ready')) && bytes === DEMO_BYTES;
+  results[`plain http: directly (${line})`] = insecure && !log.some((l) => l.startsWith('Demo data ready'))
+    && bytes === DEMO_BYTES;
   await page.context().close();
 }
 

@@ -25,6 +25,9 @@ typedef HRESULT __stdcall CoCreateGuid_t(UBYTE *pguid);
 #else
 #include <stdlib.h>
 #endif
+#ifdef PLATFORM_EMSCRIPTEN
+#include <unistd.h>  // getentropy()
+#endif
 
 // get a GUID from system
 static void GetGUID(UBYTE aub[16])
@@ -61,6 +64,14 @@ static void GetGUID(UBYTE aub[16])
     FatalError(TRANS("Cannot make GUID for a player:\n%s"), strError);
   }
 
+#elif defined(PLATFORM_EMSCRIPTEN)
+
+  // (rand() is never seeded, so it would give every new player the same GUIDs, and
+  // two of them couldn't play together; the browser has good random numbers)
+  if (getentropy(aub, 16) != 0) {
+    FatalError(TRANS("Cannot make GUID for a player."));
+  }
+
 #else
 
     // !!! FIXME : rcg10112001 Is this sufficient for these purposes?
@@ -68,6 +79,11 @@ static void GetGUID(UBYTE aub[16])
         aub[i] = (UBYTE) (255.0 * rand() / (RAND_MAX + 1.0));
 
 #endif
+}
+
+void CPlayerCharacter::RenewGUID(void)
+{
+  GetGUID(pc_aubGUID);
 }
 
 /*

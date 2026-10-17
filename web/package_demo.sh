@@ -45,7 +45,8 @@ python3 "$FILE_PACKAGER" base-data.data --preload "$BASE_DIR@/data" \
 # the demo's files as they are (each one is well below GitHub Pages' 100 MB limit)
 rm -f demo-data.data demo-data.js
 rsync -a --delete --exclude '.DS_Store' "$DEMO_DIR/" "$OUT_DIR/demo/"
-(cd "$WEB_DIR/tools" && npm ci --ignore-scripts --no-audit --no-fund >/dev/null)
+if [ "$WEB_DIR/tools/package-lock.json" -nt "$WEB_DIR/tools/node_modules/.package-lock.json" ]; then
+  (cd "$WEB_DIR/tools" && npm ci --ignore-scripts --no-audit --no-fund >/dev/null)
+fi
 node "$WEB_DIR/tools/make_torrent.mjs" "$OUT_DIR" "$SITE_URL"
-cp "$WEB_DIR/tools/node_modules/webtorrent/dist/webtorrent.min.js" "$OUT_DIR/"
 ls -la "$OUT_DIR"/base-data.* "$OUT_DIR"/demo*

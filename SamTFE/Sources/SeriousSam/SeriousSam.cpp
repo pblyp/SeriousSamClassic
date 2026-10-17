@@ -582,6 +582,14 @@ void InitializeGame(void)
   }
   // init game - this will load persistent symbols
   _pGame->Initialize(CTString("Data\\SeriousSam.gms"));
+#ifdef PLATFORM_EMSCRIPTEN
+  // network games in the browser: a connection of today, unless the player chose one
+  // (the defaults are for modems)
+  if (sam_strNetworkSettings=="") {
+    sam_strNetworkSettings = "Scripts\\NetSettings\\5mb-Fiber.ini";
+    _pShell->Execute(CTString("include \"")+sam_strNetworkSettings+"\";");
+  }
+#endif
   // save executable path and sys var.
 #ifdef PLATFORM_UNIX
   _pFileSystem->GetExecutablePath(_strExePath, sizeof (_strExePath)-1);
@@ -913,6 +921,12 @@ BOOL Init( HINSTANCE hInstance, int nCmdShow, CTString strCmdLine)
     if (cmd_bQuickJoin) {
       extern void JoinNetworkGame(void);
       JoinNetworkGame();
+#ifdef PLATFORM_EMSCRIPTEN
+      // (a link to a game that is gone: rather the join menu than an empty screen)
+      if (_gmRunningGameMode==GM_NONE) {
+        StartMenus("join");
+      }
+#endif
     } else {
       StartMenus("join");
     }

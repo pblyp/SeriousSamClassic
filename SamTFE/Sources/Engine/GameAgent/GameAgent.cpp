@@ -491,6 +491,10 @@ void CServerRequest::Clear(void)
 /// Initialize GameAgent.
 extern void GameAgent_ServerInit(void)
 {
+#ifdef PLATFORM_EMSCRIPTEN
+  // no master servers or LAN search in the browser (games are joined by room code)
+  return;
+#endif
   // join
   _bServer = TRUE;
   _bInitialized = TRUE;
@@ -831,6 +835,10 @@ extern void GameAgent_ServerStateChanged(void)
 /// Request serverlist enumeration.
 extern void GameAgent_EnumTrigger(BOOL bInternet)
 {
+#ifdef PLATFORM_EMSCRIPTEN
+  // no master servers or LAN search in the browser (games are joined by room code)
+  return;
+#endif
 
   if ( _pNetwork->ga_bEnumerationChange ) {
     return;

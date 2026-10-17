@@ -9,21 +9,28 @@
 <body>
 <div id="game">
   <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+  <div id="net-badge" role="status" hidden>
+    <span id="net-badge-text"></span>
+    <button id="net-copy" type="button">Copy link</button>
+    <button id="net-share" type="button" hidden>Share</button>
+    <button id="net-hide" type="button" aria-label="Hide">&times;</button>
+  </div>
   <div id="overlay">
     <div id="panel">
       <h1>Serious Sam</h1>
       <p class="subtitle">The First Encounter</p>
 
       <div id="choose">
+        <p id="invite" class="invite" hidden></p>
         <button id="play-demo" class="primary" type="button">Play the demo</button>
-        <p class="note">Karnak demo level &middot; about 105&nbsp;MB, downloaded once<br>
-          and shared peer to peer with other players (WebTorrent)</p>
+        <p class="note">Karnak demo level &middot; about 105&nbsp;MB, downloaded once</p>
         <label id="own-files" class="secondary" tabindex="0">
           Use my game files&hellip;
-          <input id="folder" type="file" webkitdirectory multiple hidden>
+          <input id="game-zip" type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden>
         </label>
-        <p class="note">Pick (or drop here) the folder where <em>The First Encounter</em> is installed.<br>
-          The files stay on this computer.</p>
+        <p class="note" id="own-files-note">Zip the folder where <em>The First Encounter</em> is installed
+          and pick the .zip (or drop it, or the folder, here).<br>
+          The files stay on this device.</p>
         <div class="options">
           <label class="option">Touch controls
             <select id="touch-mode">
@@ -33,13 +40,55 @@
             </select>
           </label>
           <label class="option" id="fullscreen-option"><input id="fullscreen" type="checkbox"> Fullscreen</label>
+          <label class="option">Connection type
+            <select id="p2p-mode">
+              <option value="secure">WebRTC</option>
+              <option value="none">No WebRTC</option>
+            </select>
+          </label>
         </div>
+        <details class="about">
+          <summary>About WebRTC connections</summary>
+          <p>With WebRTC, browsers connect to each other directly. They find each other through
+            this page's server, if it helps with that, or else through public BitTorrent trackers
+            and Nostr relays. Players connected this way can see each other's IP addresses.</p>
+          <p>The demo is downloaded with WebTorrent: from other players who have this page open,
+            and from this site. While you play, your browser shares the demo with other players
+            in turn (at most 1&nbsp;MB/s).</p>
+          <p><strong>Network games</strong> (Network &rarr; Start in the game's menu): the player who
+            starts one gets a room code and a link to send to the others. Their browsers connect
+            with WebRTC, and also through this page's server if it can pass games on, which then
+            covers browsers and networks that WebRTC doesn't get through.</p>
+          <p><strong>WebRTC</strong> works when the page is opened over https (or on
+            localhost): browsers only offer the cryptography it needs there. Elsewhere, e.g. from
+            a computer on your local network, the demo comes from this site only, and network games
+            go through this page's server, if it can pass them on.</p>
+          <p><strong>No WebRTC</strong> doesn't connect to other players' browsers: the demo comes
+            from this site, and network games go through this page's server (only possible if it
+            can pass games on).</p>
+          <p>What is shared: only the files of the official <em>Serious Sam: The First
+            Encounter</em> demo (2001), which, to our knowledge, is freely redistributable. It is
+            the same demo that was given away on magazine discs and download sites and that the
+            Internet Archive hosts today. Nothing else is ever shared: game files from your own
+            installation, your settings and your saved games stay on your device.</p>
+        </details>
+        <p class="purge-row"><button id="purge" class="link-button" type="button">Clear stored data&hellip;</button>
+          <span id="purge-status" class="note" role="status"></span></p>
       </div>
 
       <div id="loading" hidden>
-        <div id="status">Loading&hellip;</div>
+        <div id="status" role="status">Loading&hellip;</div>
         <progress id="progress" max="1" value="0"></progress>
         <button id="start" class="primary" type="button" hidden>Start</button>
+        <div id="error" hidden>
+          <p id="error-hint" class="note"></p>
+          <details id="error-details" class="about">
+            <summary>What the game said</summary>
+            <pre id="error-text"></pre>
+          </details>
+          <button id="start-over" class="primary" type="button">Start over</button>
+          <p><button id="error-purge" class="link-button" type="button">Clear stored data and start over&hellip;</button></p>
+        </div>
       </div>
 
       <p class="help" id="help-keyboard">Click the game to use the mouse &middot; <kbd>Esc</kbd> menu &middot; <kbd>~</kbd> console &middot; <kbd>F11</kbd> fullscreen</p>
@@ -50,6 +99,8 @@
 <pre id="log" hidden></pre>
 <script src="fullscreen.js"></script>
 <script src="demo-download.js"></script>
+<script src="zip.js"></script>
+<script src="netplay.js"></script>
 <script src="touch.js"></script>
 <script src="main.js"></script>
 </body>

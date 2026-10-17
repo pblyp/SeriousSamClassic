@@ -53,6 +53,9 @@ public:
   /* Set character team. */
   void SetTeam(CTString strTeam);
 
+  // give the character a new identity (other players tell characters apart by it)
+  void RenewGUID(void);
+
   void Load_t( const CTFileName &fnFile); // throw char *
   void Save_t( const CTFileName &fnFile); // throw char *
   /* Read character from a stream. */

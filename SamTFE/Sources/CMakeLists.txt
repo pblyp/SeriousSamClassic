@@ -1345,6 +1345,7 @@ if(EMSCRIPTEN)
         Engine/Graphics/Emscripten/GL1Emulation.cpp
         Engine/Base/Emscripten/StaticDynamicLoader.cpp
         Engine/Base/Emscripten/WebPlatform.cpp
+        Engine/Base/Emscripten/WebNet.cpp
         "${CMAKE_CURRENT_BINARY_DIR}/StaticSymbols.cpp"
     )
 endif()

@@ -6246,7 +6246,12 @@ void CNetworkOpenMenu::Initialize_t(void)
   mgNetworkOpenTitle.mg_strText = TRANS("JOIN");
   gm_lhGadgets.AddTail( mgNetworkOpenTitle.mg_lnNode);
 
+#ifdef PLATFORM_EMSCRIPTEN
+  // in the browser, games are joined by the code of their room (see Engine/Base/Emscripten/WebNet.h)
+  mgNetworkOpenAddressLabel.mg_strText = TRANS("Room code:");
+#else
   mgNetworkOpenAddressLabel.mg_strText = TRANS("Address:");
+#endif
   mgNetworkOpenAddressLabel.mg_boxOnScreen = BoxMediumLeft(1, _fGlobalProfileAdjuster);
   mgNetworkOpenAddressLabel.mg_iCenterI = -1;
   gm_lhGadgets.AddTail( mgNetworkOpenAddressLabel.mg_lnNode);
@@ -6260,12 +6265,16 @@ void CNetworkOpenMenu::Initialize_t(void)
   mgNetworkOpenAddress.mg_pmgUp = &mgNetworkOpenJoin;
   mgNetworkOpenAddress.mg_pmgDown = &mgNetworkOpenPort;
   mgNetworkOpenAddress.mg_strTip = TRANS("specify server address");
+#ifdef PLATFORM_EMSCRIPTEN
+  mgNetworkOpenAddress.mg_strTip = TRANS("the code shown to the player who started the game");
+  // (no ports)
+  mgNetworkOpenAddress.mg_pmgDown = &mgNetworkOpenJoin;
+#endif
   gm_lhGadgets.AddTail( mgNetworkOpenAddress.mg_lnNode);
 
   mgNetworkOpenPortLabel.mg_strText = TRANS("Port:");
   mgNetworkOpenPortLabel.mg_boxOnScreen = BoxMediumLeft(2, _fGlobalProfileAdjuster);
   mgNetworkOpenPortLabel.mg_iCenterI = -1;
-  gm_lhGadgets.AddTail( mgNetworkOpenPortLabel.mg_lnNode);
 
   mgNetworkOpenPort.mg_strText = "";
   mgNetworkOpenPort.mg_ctMaxStringLen = 10;
@@ -6276,10 +6285,16 @@ void CNetworkOpenMenu::Initialize_t(void)
   mgNetworkOpenPort.mg_pmgUp = &mgNetworkOpenAddress;
   mgNetworkOpenPort.mg_pmgDown = &mgNetworkOpenJoin;
   mgNetworkOpenPort.mg_strTip = TRANS("specify server address");
+#ifndef PLATFORM_EMSCRIPTEN
+  gm_lhGadgets.AddTail( mgNetworkOpenPortLabel.mg_lnNode);
   gm_lhGadgets.AddTail( mgNetworkOpenPort.mg_lnNode);
+#endif
 
   mgNetworkOpenJoin.mg_boxOnScreen = BoxMediumMiddle(3, _fGlobalProfileAdjuster);
   mgNetworkOpenJoin.mg_pmgUp = &mgNetworkOpenPort;
+#ifdef PLATFORM_EMSCRIPTEN
+  mgNetworkOpenJoin.mg_pmgUp = &mgNetworkOpenAddress;
+#endif
   mgNetworkOpenJoin.mg_pmgDown = &mgNetworkOpenAddress;
   mgNetworkOpenJoin.mg_strText = TRANS("Join");
   gm_lhGadgets.AddTail( mgNetworkOpenJoin.mg_lnNode);
