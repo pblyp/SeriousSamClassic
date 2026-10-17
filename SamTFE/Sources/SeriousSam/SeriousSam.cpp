@@ -954,7 +954,13 @@ BOOL Init( HINSTANCE hInstance, int nCmdShow, CTString strCmdLine)
     }
   // if no relevant starting at command line
   } else {
+#ifdef PLATFORM_EMSCRIPTEN
+    // in the browser, straight to the menu: no intro flyover, no demos
+    _bInAutoPlayLoop = FALSE;
+    StartMenus();
+#else
     StartNextDemo();
+#endif
   }
   return TRUE;
 }

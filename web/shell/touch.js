@@ -111,7 +111,8 @@
       state.lookY += dy * LOOK_SPEED;
     };
 
-    // moving: an analog stick that appears under the thumb, and follows it past its rim
+    // moving: an analog stick that appears under the thumb, and stays where the thumb first
+    // touched until it lets go
     let stickOrigin = null;
     const releaseStick = () => {
       stickOrigin = null;
@@ -135,10 +136,9 @@
         let dy = e.clientY - stickOrigin.y;
         const len = Math.hypot(dx, dy);
         if (len > STICK_RADIUS) {
-          // drag the base along, so turning back reacts at once
+          // (the knob stops at the rim)
           dx *= STICK_RADIUS / len;
           dy *= STICK_RADIUS / len;
-          placeStick(e.clientX - dx, e.clientY - dy);
         }
         stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
         // full speed at the rim, nothing in the middle

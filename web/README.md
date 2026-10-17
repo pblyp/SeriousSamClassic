@@ -207,6 +207,7 @@ trackers). The two-player part of `torrent.mjs` is skipped where WebRTC can't co
 
 ## Known differences
 
+- The game starts in the menu, without the intro flyover and the demos.
 - No LAN or internet server lists: network games are joined by room code.
 - Demos recorded with other builds desynchronize after a while (floating point
   differences change the simulation), as they do between native builds.

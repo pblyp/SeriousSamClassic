@@ -65,7 +65,7 @@ await touch('touchMove', [[150, H * 0.7 - 28, 1]]);
 const halfMove = await move();
 await touch('touchMove', [[150, H * 0.7 - 100, 1]]);
 const fullMove = await move();
-// past the rim the stick follows the thumb, so coming back reverses at once
+// past the rim the stick stays put: coming back from there slows down
 await touch('touchMove', [[150, H * 0.7 - 100 + 56, 1]]);
 const backMove = await move();
 await touch('touchEnd', []);
@@ -130,7 +130,7 @@ const results = {
   [`taps work after a tap that started the game (${tapsAfterPlaying})`]: tapsAfterPlaying === 'mousedown mouseup mousedown mouseup',
   [`stick is analog (${halfMove} / ${fullMove} / ${backMove} / ${releasedMove})`]:
     halfMove[0] === 0 && halfMove[1] < -0.3 && halfMove[1] > -0.5 && fullMove[1] === -1
-    && backMove[1] === 0 && releasedMove[1] === 0,
+    && backMove[1] < -0.7 && backMove[1] > -0.8 && releasedMove[1] === 0,
   'controls hidden while NETRICSA is up': controlsHiddenInMenu,
   'tapping Exit closed NETRICSA': playing,
   'Esc button opened the menu': menu,
