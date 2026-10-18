@@ -22,6 +22,8 @@
 
       <div id="choose">
         <p id="invite" class="invite" hidden></p>
+        <button id="play-own" class="primary" type="button" hidden>Play my game files</button>
+        <p class="note" id="play-own-note" hidden></p>
         <button id="play-demo" class="primary" type="button">Play the demo</button>
         <p class="note">Karnak demo level &middot; about 80&nbsp;MB, downloaded once</p>
         <label id="own-files" class="secondary" tabindex="0">
@@ -30,7 +32,7 @@
         </label>
         <p class="note" id="own-files-note">Zip the folder where <em>The First Encounter</em> is installed
           and pick the .zip (or drop it, or the folder, here).<br>
-          The files stay on this device.</p>
+          The files stay on this device: they are kept in this browser for next time.</p>
         <div class="options">
           <label class="option">Touch controls
             <select id="touch-mode">
@@ -72,7 +74,8 @@
             Internet Archive hosts today. Nothing else is ever shared: game files from your own
             installation, your settings and your saved games stay on your device.</p>
         </details>
-        <p class="purge-row"><button id="purge" class="link-button" type="button">Clear stored data&hellip;</button>
+        <p class="purge-row"><button id="clear-assets" class="link-button" type="button">Clear assets&hellip;</button>
+          <button id="clear-data" class="link-button" type="button">Clear my data&hellip;</button>
           <span id="purge-status" class="note" role="status"></span></p>
       </div>
 
@@ -87,7 +90,8 @@
             <pre id="error-text"></pre>
           </details>
           <button id="start-over" class="primary" type="button">Start over</button>
-          <p><button id="error-purge" class="link-button" type="button">Clear stored data and start over&hellip;</button></p>
+          <p><button id="error-clear-assets" class="link-button" type="button">Clear assets and start over&hellip;</button></p>
+          <p><button id="error-clear-data" class="link-button" type="button">Clear my data and start over&hellip;</button></p>
         </div>
       </div>
 

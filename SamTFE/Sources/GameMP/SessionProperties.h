@@ -81,6 +81,8 @@ public:
   ULONG sp_ulLevelsMask;    // mask of visited levels so far
 
   BOOL  sp_bUseExtraEnemies;  // spawn extra multiplayer enemies
+
+  BOOL  sp_bDoubleHealth;     // players have twice the health (single player option)
 };
 
 // NOTE: never instantiate CSessionProperties, as its size is not fixed to the size defined in engine

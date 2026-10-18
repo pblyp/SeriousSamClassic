@@ -126,6 +126,7 @@ INDEX gam_bHealthArmorStays = TRUE;
 INDEX gam_bAllowHealth = TRUE;
 INDEX gam_bAllowArmor = TRUE;
 INDEX gam_bInfiniteAmmo = FALSE;
+INDEX gam_bDoubleHealth = FALSE;
 INDEX gam_bRespawnInPlace = TRUE;
 INDEX gam_bPlayEntireGame = TRUE;
 INDEX gam_bFriendlyFire = FALSE;
@@ -1294,6 +1295,7 @@ void CGame::InitInternal( void)
   _pShell->DeclareSymbol("persistent user INDEX gam_bAllowHealth     ;", (void *)&gam_bAllowHealth     );
   _pShell->DeclareSymbol("persistent user INDEX gam_bAllowArmor      ;", (void *)&gam_bAllowArmor      );
   _pShell->DeclareSymbol("persistent user INDEX gam_bInfiniteAmmo    ;", (void *)&gam_bInfiniteAmmo    );
+  _pShell->DeclareSymbol("persistent user INDEX gam_bDoubleHealth    ;", (void *)&gam_bDoubleHealth    );
   _pShell->DeclareSymbol("persistent user INDEX gam_bRespawnInPlace  ;", (void *)&gam_bRespawnInPlace  );
 
   _pShell->DeclareSymbol("persistent user INDEX gam_iCredits;", (void *)&gam_iCredits);

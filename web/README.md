@@ -67,12 +67,15 @@ All files are well below Pages' 100 MB limit (the largest is the demo's 54 MB
   the game needs one by one with the browser's `DecompressionStream`. Dropping the folder
   itself on the page works too. Each `.gro` file is checked on the way in (they are zip
   archives too), so a damaged or cut short one is named before the game starts.
+  The player's files are also kept in IndexedDB (`sam-own-files`), and counted as kept
+  only once the game has started with them; on later visits *Play my game files* uses them.
 - **When the game can't start**, the page says what happened (with the engine's message
-  under "What the game said") and what to try, with *Start over* and *Clear stored data*.
-  *Clear stored data…* (also on the start page) deletes, after asking, only what this page
-  keeps: settings and saved games (`/user`), the cached base game package, the demo's
-  pieces and the start page's options. Other sites on the same address (e.g. a
-  `github.io` account's other projects) are left alone.
+  under "What the game said") and what to try, with *Start over*, *Clear assets* and
+  *Clear my data* (both also on the start page). Each deletes, after asking, only its part
+  of what this page keeps. *Clear assets…*: the demo's pieces, the cached base game package
+  and the player's kept game files. *Clear my data…*: settings and saved games (`/user`)
+  and the start page's options. Other sites on the same address (e.g. a `github.io`
+  account's other projects) are left alone.
   Settings are saved whenever the page is hidden, since a tab can be closed at any time.
 - **Demo download.** `shell/demo-download.js` gets the demo with
   [WebTorrent](https://webtorrent.io): from other players who have the page open

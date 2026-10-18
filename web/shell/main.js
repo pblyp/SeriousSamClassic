@@ -40,6 +40,8 @@
   const statusEl = document.getElementById('status');
   const progressEl = document.getElementById('progress');
   const playDemoButton = document.getElementById('play-demo');
+  const playOwnButton = document.getElementById('play-own');
+  const playOwnNote = document.getElementById('play-own-note');
   const zipInput = document.getElementById('game-zip');
   const ownFilesLabel = document.getElementById('own-files');
   const ownFilesNote = document.getElementById('own-files-note');
@@ -98,35 +100,117 @@
 
   // what may help when the game doesn't start
   function startupHint() {
+    if (usingOwnFiles && ownFilesFromStore) {
+      return 'The game files kept in this browser may be damaged or gone: pick the .zip again '
+        + '(or clear the assets first). If that doesn\'t help, clear your data: settings saved earlier '
+        + 'can keep the game from starting.';
+    }
     if (usingOwnFiles) {
       return 'Check that the .zip is of the folder where Serious Sam: The First Encounter is installed '
         + '(with its .gro files), and that it is complete: zip the folder again, or pick another .zip. '
-        + 'If that doesn\'t help, clear the stored data: settings saved by an earlier attempt can keep the game from starting.';
+        + 'If that doesn\'t help, clear your data: settings saved by an earlier attempt can keep the game from starting.';
     }
-    return 'Try again. If it keeps happening, clear the stored data: a damaged download or settings '
-      + 'saved earlier can keep the game from starting.';
+    return 'Try again. If it keeps happening, clear the assets (the download may be damaged), '
+      + 'or your data (settings saved earlier can keep the game from starting).';
   }
 
   // ---------------------------------------------------------------- stored data
 
   // what the page keeps in this browser (only its own: a github.io address is shared with
-  // other sites): settings and saved games (/user), the base game files package, the demo's
-  // pieces, and the start page's options
+  // other sites), in two kinds that are cleared separately:
+  // - assets: the demo's pieces, the base game files package, the player's game files;
+  // - the player's data: settings and saved games (/user), and the start page's options
   const OPTION_KEYS = ['touchControls', 'fullscreen', 'p2pMode'];
-  async function storedDatabases() {
-    const names = ['/user', 'EM_PRELOAD_CACHE'];
-    if (indexedDB.databases) {
-      for (const { name } of await indexedDB.databases()) {
-        if (name && name.startsWith('sam-demo-')) names.push(name);
-      }
-    }
-    return names;
+  const OWN_FILES_DB = 'sam-own-files';
+
+  function deleteDatabase(name) {
+    return new Promise((resolve) => {
+      const request = indexedDB.deleteDatabase(name);
+      request.onsuccess = request.onerror = resolve;
+      // (still open somewhere: it goes when that closes, e.g. when the page is loaded again)
+      request.onblocked = resolve;
+    });
   }
 
-  async function purgeStoredData() {
-    const ok = confirm('Delete everything this page keeps in this browser?\n\n'
-      + 'Your settings and saved games, the downloaded demo and the options on this page will be deleted. '
-      + 'Your own game files are never stored, they aren\'t affected.');
+  // a transaction on one object store; resolves with what fn's request got once it is done
+  function transaction(db, storeName, mode, fn) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, mode);
+      const request = fn(tx.objectStore(storeName));
+      tx.oncomplete = () => resolve(request ? request.result : undefined);
+      tx.onerror = tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction failed'));
+    });
+  }
+
+  // the player's game files, kept in IndexedDB so the next visit can play them without
+  // picking the .zip again. The set counts only once the game has started with it (its
+  // 'meta' record, with the list of files, is written then), so files that are cut short or
+  // don't work aren't offered. (ArrayBuffers, not Blobs: WebKit doesn't store Blobs in some
+  // contexts; each file is read on its own when it is needed.)
+  const OwnFiles = {
+    db: null,
+    open() {
+      if (this.db) return Promise.resolve(this.db);
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(OWN_FILES_DB, 1);
+        request.onupgradeneeded = () => {
+          request.result.createObjectStore('files', { keyPath: 'path' });
+          request.result.createObjectStore('meta');
+        };
+        request.onsuccess = () => {
+          this.db = request.result;
+          this.db.onversionchange = () => this.close();
+          resolve(this.db);
+        };
+        request.onerror = () => reject(request.error || new Error('Cannot open IndexedDB'));
+        request.onblocked = () => reject(new Error('IndexedDB is blocked'));
+      });
+    },
+    close() {
+      if (this.db) {
+        this.db.close();
+        this.db = null;
+      }
+    },
+    // { files: [{ path, size }], bytes, savedAt } of a complete set, or null
+    async stored() {
+      // (without creating the database just to look)
+      if (indexedDB.databases && !(await indexedDB.databases()).some(({ name }) => name === OWN_FILES_DB)) {
+        return null;
+      }
+      const db = await this.open();
+      return (await transaction(db, 'meta', 'readonly', (store) => store.get('meta'))) || null;
+    },
+    async read(path) {
+      const record = await transaction(await this.open(), 'files', 'readonly', (store) => store.get(path));
+      if (!record) throw new Error(`${path} is missing from the game files kept in this browser.`);
+      return record.data;
+    },
+    // start a new set in place of the kept one
+    async begin() {
+      await this.remove();
+      // (so the browser is less likely to delete them when space runs low)
+      if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist().catch(() => {});
+      }
+      await this.open();
+    },
+    async put(path, buffer) {
+      await transaction(this.db, 'files', 'readwrite', (store) => store.put({ path, data: buffer }));
+    },
+    async finish(files, bytes) {
+      await transaction(await this.open(), 'meta', 'readwrite', (store) => store.put({ files, bytes, savedAt: Date.now() }, 'meta'));
+    },
+    async remove() {
+      this.close();
+      await deleteDatabase(OWN_FILES_DB);
+    },
+  };
+
+  async function clearAssets() {
+    const ok = confirm('Delete the game files this page keeps in this browser?\n\n'
+      + 'The downloaded demo and your game files kept here will be deleted (the demo is downloaded '
+      + 'again, and your .zip picked again, the next time). Your settings and saved games are kept.');
     if (!ok) return false;
     // close what this page has open, so the databases can go
     try {
@@ -134,14 +218,25 @@
     } catch (e) {
       // gone already
     }
+    const names = ['EM_PRELOAD_CACHE', OWN_FILES_DB];
+    if (indexedDB.databases) {
+      for (const { name } of await indexedDB.databases()) {
+        if (name && name.startsWith('sam-demo-')) names.push(name);
+      }
+    }
+    await Promise.all([OwnFiles.remove(), ...names.map(deleteDatabase)]);
+    log('Assets cleared');
+    return true;
+  }
+
+  async function clearMyData() {
+    const ok = confirm('Delete your saved games and settings?\n\n'
+      + 'Your saved games, the game\'s settings and controls, and the options on this page will be deleted. '
+      + 'The game files kept in this browser (the demo, your own) are kept.');
+    if (!ok) return false;
     const openDatabases = (window.Module && Module.IDBFS && Module.IDBFS.dbs) || {};
     for (const db of Object.values(openDatabases)) db.close();
-    await Promise.all((await storedDatabases()).map((name) => new Promise((resolve) => {
-      const request = indexedDB.deleteDatabase(name);
-      request.onsuccess = request.onerror = resolve;
-      // (still open somewhere: it goes when that closes, e.g. when the page is loaded again)
-      request.onblocked = resolve;
-    })));
+    await deleteDatabase('/user');
     for (const key of OPTION_KEYS) {
       try {
         localStorage.removeItem(key);
@@ -149,7 +244,7 @@
         // not stored then
       }
     }
-    log('Stored data cleared');
+    log('Player data cleared');
     return true;
   }
 
@@ -226,6 +321,10 @@
   // [{ path: 'Levels/...', size, read() -> Promise<ArrayBuffer> }]
   let dataFiles = null;
   let usingOwnFiles = false;
+  // the player's files came from those kept in this browser (not picked just now)
+  let ownFilesFromStore = false;
+  // { files: [{ path, size }], bytes } of the player's files just stored, to be marked complete once the game runs
+  let ownFilesKept = null;
   // whether the game got through starting up (its main loop reports to the page every frame)
   const gameRunning = () => window.Module !== undefined && Module.webGameInput !== undefined;
 
@@ -316,10 +415,25 @@
   }
 
   // copy the game files into the game's file system (over the base files, if any)
+  // (and keep the player's newly picked files in this browser, if it has room for them)
   async function writeDataFiles() {
     const FS = Module.FS;
     const totalBytes = dataFiles.reduce((sum, { size }) => sum + size, 0);
     let doneBytes = 0;
+    let keeping = false;
+    const stopKeeping = (e) => {
+      keeping = false;
+      log(`Your game files can't be kept in this browser: ${e && e.message}`);
+      OwnFiles.remove().catch(() => {});
+    };
+    if (usingOwnFiles && !ownFilesFromStore) {
+      try {
+        await OwnFiles.begin();
+        keeping = true;
+      } catch (e) {
+        stopKeeping(e);
+      }
+    }
     for (const { path, size, read } of dataFiles) {
       setStatus(`Preparing the game files… ${Math.round(100 * doneBytes / totalBytes)}%`, doneBytes / totalBytes);
       const fullPath = `/data/${path}`;
@@ -329,9 +443,31 @@
         checkGroupFile(path, buffer);
       }
       FS.writeFile(fullPath, new Uint8Array(buffer));
+      if (keeping) {
+        try {
+          await OwnFiles.put(path, buffer);
+        } catch (e) {
+          stopKeeping(e);
+        }
+      }
       doneBytes += size;
     }
     log(`Copied ${dataFiles.length} game files (${Math.round(totalBytes / 1048576)} MB)`);
+    if (keeping) {
+      ownFilesKept = { files: dataFiles.map(({ path, size }) => ({ path, size })), bytes: totalBytes };
+    }
+  }
+
+  // the kept files count once the game has started with them (its main loop runs)
+  function finishKeepingOwnFiles() {
+    if (!ownFilesKept) return;
+    const timer = setInterval(() => {
+      if (!gameRunning()) return;
+      clearInterval(timer);
+      OwnFiles.finish(ownFilesKept.files, ownFilesKept.bytes)
+        .then(() => log(`Your game files are kept in this browser (${Math.round(ownFilesKept.bytes / 1048576)} MB)`))
+        .catch((e) => log(`Your game files can't be kept in this browser: ${e.message}`));
+    }, 1000);
   }
 
   // ---------------------------------------------------------------- engine
@@ -385,6 +521,7 @@
       log('Touch controls on');
     }
     canvas.focus();
+    finishKeepingOwnFiles();
     const args = engineArguments();
     log(`Starting with arguments: ${args.join(' ')}`);
     try {
@@ -611,6 +748,7 @@
       }
       dataFiles = selectGameFiles(entries);
       usingOwnFiles = true;
+      ownFilesFromStore = false;
     } catch (e) {
       ownFilesNote.textContent = e.message;
       return;
@@ -619,22 +757,65 @@
     load(() => loadScript('base-data.js'));
   }
 
+  // the player's game files kept in this browser from an earlier visit
+  function useStoredFiles() {
+    load(async () => {
+      const meta = await OwnFiles.stored();
+      if (!meta) {
+        throw new Error('The game files kept in this browser are gone. Pick the .zip again.');
+      }
+      dataFiles = meta.files.map(({ path, size }) => ({ path, size, read: () => OwnFiles.read(path) }));
+      usingOwnFiles = true;
+      ownFilesFromStore = true;
+      await loadScript('base-data.js');
+    });
+  }
+
+  // offer the kept game files, if there are any
+  async function showStoredFiles() {
+    let meta = null;
+    try {
+      meta = await OwnFiles.stored();
+    } catch (e) {
+      // (no IndexedDB, e.g. in some private windows)
+    }
+    playOwnButton.hidden = playOwnNote.hidden = !meta;
+    // the demo is the main choice only when there are no kept files
+    playDemoButton.classList.toggle('primary', !meta);
+    playDemoButton.classList.toggle('secondary', !!meta);
+    if (meta) {
+      playOwnNote.textContent = `Kept in this browser · about ${Math.max(1, Math.round(meta.bytes / 1048576))} MB`;
+    }
+  }
+  showStoredFiles();
+
   // ---------------------------------------------------------------- page events
 
   playDemoButton.addEventListener('click', loadDemo);
+  playOwnButton.addEventListener('click', useStoredFiles);
   startButton.addEventListener('click', start);
   document.getElementById('start-over').addEventListener('click', () => location.reload());
-  document.getElementById('error-purge').addEventListener('click', async () => {
-    if (await purgeStoredData()) location.reload();
+  document.getElementById('error-clear-assets').addEventListener('click', async () => {
+    if (await clearAssets()) location.reload();
   });
-  document.getElementById('purge').addEventListener('click', async () => {
-    if (await purgeStoredData()) {
+  document.getElementById('error-clear-data').addEventListener('click', async () => {
+    if (await clearMyData()) location.reload();
+  });
+  const purgeStatus = document.getElementById('purge-status');
+  document.getElementById('clear-assets').addEventListener('click', async () => {
+    if (await clearAssets()) {
+      await showStoredFiles();
+      purgeStatus.textContent = 'Assets cleared.';
+    }
+  });
+  document.getElementById('clear-data').addEventListener('click', async () => {
+    if (await clearMyData()) {
       // the start page's options are back to their defaults
       touchSelect.value = loadTouchMode();
       p2pSelect.value = loadP2pMode();
       fullscreenCheckbox.checked = TouchControls.wanted('auto');
       updateTouchHelp();
-      document.getElementById('purge-status').textContent = 'Stored data cleared.';
+      purgeStatus.textContent = 'Your data cleared.';
     }
   });
 

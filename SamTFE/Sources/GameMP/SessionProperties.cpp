@@ -35,6 +35,7 @@ extern INDEX gam_bHealthArmorStays;
 extern INDEX gam_bAllowHealth     ;
 extern INDEX gam_bAllowArmor      ;
 extern INDEX gam_bInfiniteAmmo    ;
+extern INDEX gam_bDoubleHealth    ;
 extern INDEX gam_bRespawnInPlace  ;
 extern INDEX gam_bPlayEntireGame;
 extern INDEX gam_bWeaponsStay;
@@ -158,13 +159,14 @@ void CGame::SetSinglePlayerSession(CSessionProperties &sp)
   sp.sp_bHealthArmorStays = FALSE;
   sp.sp_bAllowHealth = TRUE;
   sp.sp_bAllowArmor = TRUE;
-  sp.sp_bInfiniteAmmo = FALSE;
+  sp.sp_bInfiniteAmmo = gam_bInfiniteAmmo;
   sp.sp_bRespawnInPlace = FALSE;
-  sp.sp_fExtraEnemyStrength          = 0;
+  sp.sp_fExtraEnemyStrength          = gam_fExtraEnemyStrength;
   sp.sp_fExtraEnemyStrengthPerPlayer = 0;
 
   sp.sp_iBlood = Clamp( gam_iBlood, (INDEX)0, (INDEX)3);
   sp.sp_bGibs  = gam_bGibs;
+  sp.sp_bDoubleHealth = gam_bDoubleHealth;
 }
 
 // set properties for a quick start session

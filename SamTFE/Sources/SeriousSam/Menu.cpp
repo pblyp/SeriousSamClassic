@@ -1078,6 +1078,10 @@ void StartSinglePlayerGame(void)
 
   if (_pGame->NewGame( _pGame->gam_strCustomLevel, _pGame->gam_strCustomLevel, sp))
   {
+    // mark the level as visited (only levels entered from another one are marked otherwise),
+    // so it is listed under Custom Level
+    CTString strDummy("1");
+    SaveStringVar(CTFileName(_pGame->gam_strCustomLevel).NoExt()+".vis", strDummy);
     StopMenus();
     _gmRunningGameMode = GM_SINGLE_PLAYER;
   } else {
@@ -3762,11 +3766,7 @@ void CSinglePlayerMenu::Initialize_t(void)
   gm_lhGadgets.AddTail( mgSingleCustom.mg_lnNode);
   mgSingleCustom.mg_pmgUp = &mgSingleNewGame;
   mgSingleCustom.mg_pmgDown = &mgSingleQuickLoad;
-  if (_bDemoData) {
-    mgSingleCustom.mg_pActivatedFunction = &DisabledFunction;
-  } else {
-    mgSingleCustom.mg_pActivatedFunction = &StartSelectLevelFromSingle;
-  }
+  mgSingleCustom.mg_pActivatedFunction = &StartSelectLevelFromSingle;
 
   mgSingleQuickLoad.mg_strText = TRANS("QUICK LOAD");
   mgSingleQuickLoad.mg_bfsFontSize = BFS_LARGE;

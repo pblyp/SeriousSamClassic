@@ -816,18 +816,20 @@ FLOAT TopArmor(void)
 }
 FLOAT MaxHealth(void)
 {
+  FLOAT fFactor = GetSP()->sp_bDoubleHealth ? 2.0f : 1.0f;
   if (GetSP()->sp_gdGameDifficulty<=CSessionProperties::GD_EASY) {
-    return 300;
+    return 300*fFactor;
   } else {
-    return 200;
+    return 200*fFactor;
   }
 }
 FLOAT TopHealth(void)
 {
+  FLOAT fFactor = GetSP()->sp_bDoubleHealth ? 2.0f : 1.0f;
   if (GetSP()->sp_gdGameDifficulty<=CSessionProperties::GD_EASY) {
-    return 200;
+    return 200*fFactor;
   } else {
-    return 100;
+    return 100*fFactor;
   }
 }
 

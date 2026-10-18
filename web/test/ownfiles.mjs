@@ -1,8 +1,9 @@
 // "Use my game files" with the staged demo folder zipped, as a player does with their
 // installation: checks that the page unpacks zips made in different ways exactly,
 // refuses what isn't a zip, starts the game from a zip made like macOS Finder's
-// "Compress" (with __MACOSX entries), explains what is wrong with broken game files,
-// and clears the stored data when asked to.
+// "Compress" (with __MACOSX entries), keeps the files for the next visit ("Play my game
+// files"), explains what is wrong with broken game files (and doesn't keep those), and
+// clears the assets and the player's data separately when asked to.
 //
 //   node ownfiles.mjs [--browser chromium|webkit|firefox] [game dir] [screenshot]
 
@@ -112,6 +113,51 @@ for (const l of log.filter((l) => /Copied|Demo data|Error|error/.test(l))) conso
 results['the game starts from the zip'] = log.some((l) => l.includes('Demo data detected'))
   && !log.some((l) => l.includes('FatalError'));
 await page.screenshot({ path: argv[1] || path.join(here, '../build/ownfiles.png') });
+const pageDatabases = (p) => p.evaluate(async () => (await indexedDB.databases()).map((d) => d.name).sort().join(' '));
+await page.waitForFunction(() => window.engineLog.some((l) => l.includes('are kept in this browser')), null, { timeout: 20000 })
+  .catch(() => {});
+results['the files are kept in this browser'] = (await page.evaluate(() => window.engineLog))
+  .some((l) => l.includes('are kept in this browser'));
+
+// the next visit plays them without the zip
+await page.reload();
+await page.waitForSelector('#play-own:not([hidden])', { timeout: 10000 }).catch(() => {});
+const offered = await page.isVisible('#play-own');
+results[`the next visit offers them (${await page.textContent('#play-own-note')})`] = offered;
+if (offered) {
+  await page.click('#play-own');
+  await page.waitForSelector('#start:not([hidden])', { timeout: 120000 });
+  await page.click('#start');
+  await page.waitForFunction(() => window.engineLog.some((l) => l.includes('Demo data detected')), null, { timeout: 60000 });
+  await page.waitForTimeout(5000);
+  const log2 = await page.evaluate(() => window.engineLog);
+  results['the game starts from the kept files'] = log2.some((l) => l.includes('Copied')) && !log2.some((l) => l.includes('FatalError'));
+}
+
+// clearing the assets keeps the player's data, and the other way round
+await page.reload();
+await page.waitForSelector('#play-own:not([hidden])', { timeout: 10000 }).catch(() => {});
+await page.evaluate(() => localStorage.setItem('p2pMode', 'off'));
+let before = await pageDatabases(page);
+page.once('dialog', (dialog) => dialog.dismiss());
+await page.click('#clear-assets');
+const keptWhenCancelled = await pageDatabases(page) === before;
+page.once('dialog', (dialog) => dialog.accept());
+await page.click('#clear-assets');
+await page.waitForFunction(() => document.getElementById('purge-status').textContent !== '');
+let after = await pageDatabases(page);
+results[`clearing the assets asks first, keeps settings and saved games (${before} -> ${after || 'none'})`] = keptWhenCancelled
+  && before.includes('sam-own-files') && !after.includes('sam-own-files') && !after.includes('EM_PRELOAD_CACHE')
+  && after.includes('/user') && await page.evaluate(() => localStorage.getItem('p2pMode') === 'off')
+  && !await page.isVisible('#play-own');
+before = after;
+page.once('dialog', (dialog) => dialog.accept());
+await page.click('#clear-data');
+await page.waitForFunction(() => document.getElementById('purge-status').textContent.includes('data'));
+after = await pageDatabases(page);
+results[`clearing my data removes settings and saved games and resets the options (${before} -> ${after || 'none'})`] =
+  before.includes('/user') && !after.includes('/user')
+  && await page.evaluate(() => localStorage.getItem('p2pMode') === null && document.getElementById('p2p-mode').value === 'secure');
 
 // broken game files: the page says what is wrong and what to do
 async function failWith(zip) {
@@ -136,25 +182,22 @@ results['the game failing to start with the files is explained'] =
   && (await failing.textContent('#error-hint')).includes('.zip')
   && (await failing.textContent('#error-text')).includes('Cannot initialize classes');
 
-// clearing the stored data, from the error and from the start page
-const pageDatabases = (p) => p.evaluate(async () => (await indexedDB.databases()).map((d) => d.name).sort().join(' '));
-const before = await pageDatabases(failing);
+// clearing from the error: the assets, then the player's data
+before = await pageDatabases(failing);
 failing.once('dialog', (dialog) => dialog.accept());
-await failing.click('#error-purge');
+await failing.click('#error-clear-assets');
 await failing.waitForSelector('#play-demo');
 await failing.waitForTimeout(500);
-const after = await pageDatabases(failing);
-results[`clearing from the error removes the page's data (${before} -> ${after || 'none'})`] = before.includes('/user') && after === '';
-await failing.evaluate(() => localStorage.setItem('p2pMode', 'off'));
-await failing.reload();
-failing.once('dialog', (dialog) => dialog.dismiss());
-await failing.click('#purge');
-const keptWhenCancelled = await failing.evaluate(() => localStorage.getItem('p2pMode')) === 'off';
+after = await pageDatabases(failing);
+results[`files the game didn't start with aren't offered, and clearing the assets from the error removes them (${before} -> ${after || 'none'})`] =
+  !await failing.isVisible('#play-own') && before.includes('sam-own-files') && !after.includes('sam-own-files') && after.includes('/user');
+await failing.close();
+failing = await failWith(notTheGameZip);
 failing.once('dialog', (dialog) => dialog.accept());
-await failing.click('#purge');
-await failing.waitForFunction(() => document.getElementById('purge-status').textContent !== '');
-results['clearing from the start page asks first, and resets the options'] = keptWhenCancelled
-  && await failing.evaluate(() => localStorage.getItem('p2pMode') === null && document.getElementById('p2p-mode').value === 'secure');
+await failing.click('#error-clear-data');
+await failing.waitForSelector('#play-demo');
+await failing.waitForTimeout(500);
+results['clearing my data from the error removes settings and saved games'] = !(await pageDatabases(failing)).includes('/user');
 await failing.close();
 
 await browser.close();

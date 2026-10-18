@@ -11,14 +11,15 @@ rendering with WebGL 2, playable in a web browser on computers and phones.
   once and kept in the browser. It comes from other players who have the page open
   (WebTorrent), and from the site when there are none.
 - **The full game, with your own copy.** Zip the folder where *The First Encounter* is
-  installed and pick the .zip on the start page. Your files never leave your device.
+  installed and pick the .zip on the start page. Your files never leave your device; they
+  are kept in the browser, so next time *Play my game files* starts the game without the .zip.
 - **Network games.** The player who starts a game gets a room code and a link to send to
   the others. Browsers connect directly (WebRTC), or through the page's server when it
   can pass games on.
 - **Touch screens.** Phones and tablets get on-screen controls: an analog stick under the
   left thumb, dragging on the right to look, and buttons.
-- **Settings and saved games** stay in the browser. *Clear stored data* on the start page
-  removes them.
+- **Settings and saved games** stay in the browser. *Clear my data* on the start page
+  removes them; *Clear assets* removes the downloaded demo and your kept game files instead.
 
 It runs in current Chrome, Edge, Firefox and Safari (desktop, Android and iOS).
 
