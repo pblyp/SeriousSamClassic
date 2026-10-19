@@ -112,6 +112,12 @@ progress {
   border-top: 1px solid var(--line);
   padding-top: 1rem;
 }
+/* (the gamepad's line goes with the one above it) */
+#help-gamepad {
+  margin-top: 0.5rem;
+  border-top: none;
+  padding-top: 0;
+}
 kbd {
   font: inherit;
   border: 1px solid var(--line);

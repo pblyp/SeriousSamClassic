@@ -35,6 +35,14 @@ Playing
 - **Touch:** the left thumb moves, dragging on the right looks around, and there are
   buttons for Fire, Jump, Duck, Use, weapons and Esc. Taps work as clicks in the menus.
   The controls are on by default on touch screens, and can be switched on the start page.
+- **Gamepad:** press a button on it once the page is open (browsers only show a pad after
+  that). The left stick moves, the right stick looks, RT fires, LT or X uses, A jumps,
+  B ducks, LB/RB (or the D-pad) change weapons, Y flips to the last weapon, Back opens
+  NETRICSA and Start the menu. In the menus the D-pad or left stick moves, A chooses and
+  B goes back.
+- **Aim assist:** shots go to an enemy next to the crosshair. It is on with touch controls
+  or a gamepad, and can be switched on or off for good in Options → Players and
+  controls → Customize controls → Aim assist.
 - **Your own game:** choose *Use my game files…* and pick a .zip of the installation folder
   (with its `.gro` files). On a computer you can also drop the folder itself on the page.
 - **Network games:** in the game's menu, Network → Start. A badge shows the room code with

@@ -236,6 +236,10 @@ public:
   void GameHandleTimer(void);
   virtual void LoadPlayersAndControls(void);
   virtual void SavePlayersAndControls(void);
+  // give the players in the game the characters as set up (after changes in the menus)
+  void UpdateLocalPlayerCharacters(void);
+  // aim assist for players who didn't choose: on with touch controls or a gamepad
+  virtual void ResolveAimAssist(void);
   virtual void Load_t( void);
   virtual void Save_t( void);
 

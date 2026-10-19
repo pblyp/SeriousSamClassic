@@ -211,6 +211,8 @@ static INDEX hud_bCrosshairColoring = TRUE;
 static FLOAT hud_fCrosshairScale    = 1.0f;
 static FLOAT hud_fCrosshairOpacity  = 1.0f;
 static FLOAT hud_fCrosshairRatio    = 0.5f;  // max distance size ratio
+// print where aim assist turns shots (see CPlayerWeapons::ApplyAimAssist())
+static INDEX dbg_bAimAssist = FALSE;
 // misc HUD vars
 static INDEX hud_bShowPlayerName = TRUE;
 static INDEX hud_bShowCoords     = FALSE;
@@ -428,6 +430,7 @@ void CPlayerWeapons_Init(void) {
   _pShell->DeclareSymbol("persistent user FLOAT hud_fCrosshairOpacity;",  &hud_fCrosshairOpacity);
                                   
   _pShell->DeclareSymbol("persistent user INDEX hud_bShowPlayerName;", &hud_bShowPlayerName);
+  _pShell->DeclareSymbol("user INDEX dbg_bAimAssist;", &dbg_bAimAssist);
   _pShell->DeclareSymbol("persistent user INDEX hud_bShowCoords;",     &hud_bShowCoords);
 
   _pShell->DeclareSymbol("persistent user FLOAT plr_tmSnoopingTime;",  &plr_tmSnoopingTime);
@@ -1593,6 +1596,113 @@ functions:
     plPos.RelativeToAbsolute(m_penPlayer->GetPlacement());
   };
 
+  // placement of the player's eyes (the view, whose middle the crosshair is in)
+  void CalcEyePlacement(CPlacement3D &plEye) {
+    plEye = ((CPlayer &)*m_penPlayer).en_plViewpoint;
+    plEye.pl_PositionVector(2) += ((CPlayerAnimator&)*((CPlayer &)*m_penPlayer).m_penAnimator).m_fEyesYOffset;
+    plEye.RelativeToAbsolute(m_penPlayer->GetPlacement());
+  };
+
+  // Aim assist (for touch screens and gamepads, like the console version's): a shot goes to
+  // the enemy nearest to the crosshair whose bounding box overlaps a square around it, 150%
+  // the size of the crosshair (32 pixels at 640 wide, in a 90 degree view: tangent 0.05 to
+  // the side). The square is fixed (not the player's crosshair size or view), so that it is
+  // the same on all computers of a network game. Returns where to aim, if anywhere.
+  BOOL AimAssistTarget(FLOAT fRange, FLOAT3D &vTarget, CEntity *&penTarget) {
+    const FLOAT fZone = 1.5f * 0.05f;
+    if (!(GetPlayer()->GetSettings()->ps_ulFlags&PSF_AIMASSIST)) {
+      return FALSE;
+    }
+    // (on target already)
+    if (m_penRayHit!=NULL && (m_penRayHit->GetFlags()&ENF_ALIVE) && IsDerivedFromClass(m_penRayHit, "Enemy Base")) {
+      return FALSE;
+    }
+    CPlacement3D plEye;
+    CalcEyePlacement(plEye);
+    const FLOAT3D &vEye = plEye.pl_PositionVector;
+    FLOATmatrix3D m;
+    MakeRotationMatrixFast(m, plEye.pl_OrientationAngle);
+    const FLOAT3D vRight = m.GetColumn(1);
+    const FLOAT3D vUp = m.GetColumn(2);
+    const FLOAT3D vFront = -m.GetColumn(3);
+
+    BOOL bFound = FALSE;
+    FLOAT fBestOff = UpperLimit(0.0f);
+    {FOREACHINDYNAMICCONTAINER(GetWorld()->wo_cenEntities, CEntity, iten) {
+      CEntity *pen = iten;
+      if ((pen->GetFlags()&(ENF_ALIVE|ENF_DELETED))!=ENF_ALIVE || !IsDerivedFromClass(pen, "Enemy Base")
+       || ((CEnemyBase *)pen)->m_bTemplate) {
+        continue;
+      }
+      FLOATaabbox3D box;
+      pen->GetBoundingBox(box);
+      const FLOAT3D vCenter = box.Center();
+      const FLOAT3D vSize = box.Size();
+      const FLOAT3D vToCenter = vCenter-vEye;
+      const FLOAT fDistance = vToCenter.Length();
+      const FLOAT fZ = vToCenter%vFront;
+      if (fZ<1.0f || fDistance>fRange) {
+        continue;
+      }
+      // where it is seen from the middle of the view (tangents), and how big
+      const FLOAT fX = (vToCenter%vRight)/fZ;
+      const FLOAT fY = (vToCenter%vUp)/fZ;
+      const FLOAT fRadius = 0.5f*Min(Min(vSize(1), vSize(2)), vSize(3))/fZ;
+      if (Abs(fX)-fRadius>fZone || Abs(fY)-fRadius>fZone) {
+        continue;
+      }
+      const FLOAT fOff = Sqrt(fX*fX+fY*fY);
+      if (fOff>=fBestOff) {
+        continue;
+      }
+      // the point of its box (shrunk a bit) nearest to where the crosshair is at that distance
+      const FLOAT3D vAlong = vEye+vFront*fDistance;
+      FLOAT3D vAim;
+      for (INDEX i=1; i<=3; i++) {
+        vAim(i) = Clamp(vAlong(i), vCenter(i)-0.4f*vSize(i), vCenter(i)+0.4f*vSize(i));
+      }
+      // only if it can be seen
+      CCastRay crRay(m_penPlayer, vEye, vAim);
+      crRay.cr_bHitTranslucentPortals = FALSE;
+      crRay.cr_bPhysical = FALSE;
+      crRay.cr_ttHitModels = CCastRay::TT_NONE;
+      GetWorld()->CastRay(crRay);
+      if (crRay.cr_penHit!=NULL) {
+        continue;
+      }
+      fBestOff = fOff;
+      vTarget = vAim;
+      penTarget = pen;
+      bFound = TRUE;
+    }}
+    return bFound;
+  };
+
+  // turn a shot to the target of the aim assist, if any (only to the side for weapons whose
+  // shots fly in an arc)
+  void ApplyAimAssist(CPlacement3D &plShot, FLOAT fRange, BOOL bHeadingOnly) {
+    FLOAT3D vTarget;
+    CEntity *penTarget = NULL;
+    if (!AimAssistTarget(fRange, vTarget, penTarget)) {
+      return;
+    }
+    FLOAT3D vDir = vTarget-plShot.pl_PositionVector;
+    if (vDir.Length()<0.01f) {
+      return;
+    }
+    if (dbg_bAimAssist) {
+      CPrintF("aim assist: %s at %.1f m\n", (const char *)penTarget->GetClass()->ec_pdecDLLClass->dec_strName,
+        vDir.Length());
+    }
+    vDir.Normalize();
+    ANGLE3D aShot;
+    DirectionVectorToAnglesNoSnap(vDir, aShot);
+    plShot.pl_OrientationAngle(1) = aShot(1);
+    if (!bHeadingOnly) {
+      plShot.pl_OrientationAngle(2) = aShot(2);
+    }
+  };
+
   // setup 3D sound parameters
   void Setup3DSoundParameters(void) {
     CPlayer &pl = (CPlayer&)*m_penPlayer;
@@ -1666,9 +1776,10 @@ functions:
   };
 
   // prepare Bullet
-  void PrepareBullet(FLOAT fX, FLOAT fY, FLOAT fDamage) {
+  void PrepareBullet(FLOAT fX, FLOAT fY, FLOAT fRange, FLOAT fDamage) {
     // bullet start position
     CalcWeaponPosition(FLOAT3D(fX, fY, 0), plBullet, TRUE);
+    ApplyAimAssist(plBullet, fRange, FALSE);
     // create bullet
     penBullet = CreateEntity(plBullet, CLASS_BULLET);
     // init bullet
@@ -1680,7 +1791,7 @@ functions:
 
   // fire one bullet
   void FireOneBullet(FLOAT fX, FLOAT fY, FLOAT fRange, FLOAT fDamage) {
-    PrepareBullet(fX, fY, fDamage);
+    PrepareBullet(fX, fY, fRange, fDamage);
     ((CBullet&)*penBullet).CalcTarget(fRange);
     ((CBullet&)*penBullet).m_fBulletSize = 0.1f;
     // launch bullet
@@ -1691,7 +1802,7 @@ functions:
   // fire bullets (x offset is used for double shotgun)
   void FireBullets(FLOAT fX, FLOAT fY, FLOAT fRange, FLOAT fDamage, INDEX iBullets,
     FLOAT *afPositions, FLOAT fStretch, FLOAT fJitter) {
-    PrepareBullet(fX, fY, fDamage);
+    PrepareBullet(fX, fY, fRange, fDamage);
     ((CBullet&)*penBullet).CalcTarget(fRange);
     ((CBullet&)*penBullet).m_fBulletSize = GetSP()->sp_bCooperative ? 0.1f : 0.3f;
     // launch slugs
@@ -1711,7 +1822,7 @@ functions:
     FLOAT fJitter, FLOAT fBulletSize)
   {
     fJitter*=fRange;  // jitter relative to range
-    PrepareBullet(fX, fY, fDamage);
+    PrepareBullet(fX, fY, fRange, fDamage);
     ((CBullet&)*penBullet).CalcTarget(fRange);
     ((CBullet&)*penBullet).m_fBulletSize = fBulletSize;
     ((CBullet&)*penBullet).CalcJitterTarget(fJitter);
@@ -1726,6 +1837,7 @@ functions:
     CalcWeaponPosition(
       FLOAT3D(wpn_fFX[WEAPON_GRENADELAUNCHER],wpn_fFY[WEAPON_GRENADELAUNCHER], 0), 
       plGrenade, TRUE);
+    ApplyAimAssist(plGrenade, 100.0f, TRUE);
     // create grenade
     CEntityPointer penGrenade = CreateEntity(plGrenade, CLASS_PROJECTILE);
     // init and launch grenade
@@ -1743,6 +1855,7 @@ functions:
     CalcWeaponPosition(
       FLOAT3D(wpn_fFX[WEAPON_ROCKETLAUNCHER],wpn_fFY[WEAPON_ROCKETLAUNCHER], 0), 
       plRocket, TRUE);
+    ApplyAimAssist(plRocket, 300.0f, FALSE);
     // create rocket
     CEntityPointer penRocket= CreateEntity(plRocket, CLASS_PROJECTILE);
     // init and launch rocket
@@ -1835,6 +1948,7 @@ functions:
         CalcWeaponPosition(FLOAT3D(fFX+fRDX, fFY+fRDY, 0), plLaserRay, TRUE);
         break;
     }
+    ApplyAimAssist(plLaserRay, 300.0f, FALSE);
     // create laser projectile
     CEntityPointer penLaser = CreateEntity(plLaserRay, CLASS_PROJECTILE);
     // init and launch laser projectile
@@ -1870,6 +1984,7 @@ functions:
     CalcWeaponPosition(
       FLOAT3D(wpn_fFX[WEAPON_IRONCANNON],wpn_fFY[WEAPON_IRONCANNON], 0), 
       plBall, TRUE);
+    ApplyAimAssist(plBall, 100.0f, TRUE);
     // create cannon ball
     CEntityPointer penBall = CreateEntity(plBall, CLASS_CANNONBALL);
     // init and launch cannon ball

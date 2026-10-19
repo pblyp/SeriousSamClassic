@@ -293,6 +293,11 @@
 
   touchSelect.value = loadTouchMode();
   updateTouchHelp();
+
+  // gamepads (gamepad.js) show up once a button on them is pressed
+  const helpGamepad = document.getElementById('help-gamepad');
+  helpGamepad.hidden = !GamePad.connected();
+  GamePad.onChange((connected) => { helpGamepad.hidden = !connected; });
   touchSelect.addEventListener('change', () => {
     saveOption('touchControls', touchSelect.value);
     updateTouchHelp();

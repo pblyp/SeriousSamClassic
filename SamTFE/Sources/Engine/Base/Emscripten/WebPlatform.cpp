@@ -115,6 +115,45 @@ void Web_GetTouchMove(FLOAT &fX, FLOAT &fY)
   fY = afMove[1];
 }
 
+EM_JS(void, web_poll_gamepad, (int bGameInput), {
+  // (gamepad.js may not have loaded)
+  if (window['GamePad']) {
+    window['GamePad']['poll'](Module, !!bGameInput);
+  }
+});
+
+void Web_PollGamepad(BOOL bGameInput)
+{
+  web_poll_gamepad(bGameInput);
+}
+
+EM_JS(int, web_get_pad_input, (float *pfSticks), {
+  const p = Module['webPad'];
+  for (let i = 0; i < 4; i++) {
+    HEAPF32[(pfSticks >> 2) + i] = p ? [p.moveX, p.moveY, p.lookX, p.lookY][i] : 0;
+  }
+  return p ? p.buttons : 0;
+});
+
+void Web_GetPadInput(ULONG &ulButtons, FLOAT &fMoveX, FLOAT &fMoveY, FLOAT &fLookX, FLOAT &fLookY)
+{
+  float afSticks[4];
+  ulButtons = (ULONG)web_get_pad_input(afSticks);
+  fMoveX = afSticks[0];
+  fMoveY = afSticks[1];
+  fLookX = afSticks[2];
+  fLookY = afSticks[3];
+}
+
+EM_JS(int, web_aim_assist_device, (), {
+  return (Module['webTouch'] || Module['webPadConnected']) ? 1 : 0;
+});
+
+BOOL Web_AimAssistDevice(void)
+{
+  return web_aim_assist_device();
+}
+
 EM_JS(float, web_time_since_escape, (), {
   const t = Module['webLastEscape'];
   return t === undefined ? 1e9 : performance.now() - t;

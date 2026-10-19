@@ -507,6 +507,7 @@ static void WebFollowCanvasSize(void);
 static void WebCheckPointerLock(void);
 static void WebSaveSettings(void);
 static void WebPushKey(SDL_Keycode key);
+static BOOL WebGameInput(void);
 #endif
 
 // TRUE when running on the data of the official demo instead of the full game
@@ -1639,7 +1640,9 @@ int SubMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int 
     if (strWebCommands!="") {
       _pShell->Execute(strWebCommands);
     }
-    // keys pressed with on screen buttons (handled with the next frame's messages)
+    // the gamepad: read while playing, or pressing keys in menus
+    Web_PollGamepad(WebGameInput());
+    // keys pressed with on screen buttons and the gamepad (handled with the next frame's messages)
     for (INDEX iKey = Web_TakeKeyPress(); iKey!=0; iKey = Web_TakeKeyPress()) {
       WebPushKey((SDL_Keycode)iKey);
     }
@@ -1657,8 +1660,7 @@ int SubMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int 
 
 #ifdef PLATFORM_EMSCRIPTEN
     // the page shows touch controls only while playing (in menus and demos, taps are clicks)
-    Web_SetGameInput(_pInput->IsInputEnabled()
-      && _gmRunningGameMode!=GM_NONE && _gmRunningGameMode!=GM_DEMO && _gmRunningGameMode!=GM_INTRO);
+    Web_SetGameInput(WebGameInput());
     // mix sound every frame (not only every timer tick), so little has to be mixed ahead
     _pSound->MixSounds();
     // the browser paces the frames
@@ -1935,6 +1937,13 @@ static void WebFollowCanvasSize(void)
   pdp = bWide ? pdpWideScreen : pdpNormal;
   _pGame->EnableLoadingHook(pdp);
   SetAdjusters();
+}
+
+// whether the game is being played (not menus, the console, NETRICSA or demos)
+static BOOL WebGameInput(void)
+{
+  return _pInput->IsInputEnabled()
+    && _gmRunningGameMode!=GM_NONE && _gmRunningGameMode!=GM_DEMO && _gmRunningGameMode!=GM_INTRO;
 }
 
 // queue a press and release of a key, as if it came from the keyboard

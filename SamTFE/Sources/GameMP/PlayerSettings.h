@@ -40,6 +40,8 @@ public:
 #define PSF_COMPSINGLECLICK (1L<<4)   // invoke computer with single click, not double clicks
 #define PSF_SHARPTURNING    (1L<<5)   // use prescanning to eliminate mouse lag
 #define PSF_NOBOBBING       (1L<<6)   // view bobbing on/off (for people with motion sickness problems)
+#define PSF_AIMASSIST       (1L<<7)   // shots go to enemies near the crosshair (see CPlayerWeapons::AimAssistTarget())
+#define PSF_AIMASSISTSET    (1L<<8)   // the player chose PSF_AIMASSIST; else it follows the input device (CGame::ResolveAimAssist())
   ULONG ps_ulFlags;   // various flags
 
   // get filename for model

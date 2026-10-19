@@ -106,6 +106,21 @@ All files are well below Pages' 100 MB limit (the largest is the demo's 54 MB
   analog movement axis (`Web_GetTouchMove()`, a short push walks), the rest as the keys
   and mouse of the default controls (`Web_GetTouchInput()`: Space, C, mouse buttons and
   wheel). In menus, NETRICSA and demos they hide, and taps work as mouse clicks.
+- **Gamepads.** `shell/gamepad.js` reads the browser's Gamepad API once per frame
+  (`Web_PollGamepad()`). While playing, the engine takes the sticks and buttons as a fixed
+  layout like the console version's (`Web_GetPadInput()`, `CControls::CreateAction()`): the
+  sticks are analog movement and turning (by the controls' sensitivity and invert look), the
+  buttons set the controls' actions (`ctl_bFire`, …) directly, so changed key bindings don't
+  matter. In menus, the console and NETRICSA the pad presses keys (arrows, Enter, Escape,
+  Page Up/Down) and the right stick moves the mouse.
+- **Aim assist.** A shot goes to the enemy nearest to the crosshair whose bounding box
+  overlaps a square 150% the size of the crosshair (`CPlayerWeapons::AimAssistTarget()`;
+  bullets, rockets and the laser fully, grenades and cannon balls only to the side). The
+  square is fixed (not the player's crosshair size or view), and the setting travels with
+  the player's settings (`PSF_AIMASSIST`), so all computers of a network game agree. It is
+  chosen per player in the Controls menu (in place of iFeel): Auto (on with touch controls
+  or a gamepad, `CGame::ResolveAimAssist()`), Yes or No. `dbg_bAimAssist=1` prints where
+  shots are turned.
 - **Sound.** The game mixes sound every frame and keeps only about 70 ms ready for the
   browser, so it doesn't lag behind the picture.
 
@@ -230,6 +245,7 @@ node smoke.mjs        # plays Karnak in Chromium (both builds), Firefox and WebK
 node persistence.mjs  # settings survive reloading the page
 node ownfiles.mjs     # "Use my game files": zips made in several ways, broken game files, clearing stored data (--browser webkit)
 node touch.mjs        # touch screen controls (--size 844x390 for a phone)
+node gamepad.mjs      # gamepads (a stand-in for the Gamepad API) and aim assist
 node mobile.mjs       # phone players' path on an emulated Android phone and iPhone
 node torrent.mjs      # demo download: from the site, from IndexedDB, from another player, without WebTorrent, from mirrors
 node netplay.mjs      # network games: hosting, joining by code, leaving, signaling from plain http

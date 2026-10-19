@@ -761,6 +761,76 @@ FLOAT CControls::GetAxisValue(INDEX iAxis)
   return fReading*aa.aa_fAxisInfluence;
 }
 
+#ifdef PLATFORM_EMSCRIPTEN
+// the gamepad's buttons while playing (fixed, like the console port's), as the actions of
+// the controls: the commands that keys bound to them run when pressed and released
+static const struct { INDEX iButton; const char *strAction; } _aPadActions[] = {
+  { WPB_RT,         "ctl_bFire" },
+  { WPB_LT,         "ctl_bUse" },
+  { WPB_A,          "ctl_bMoveUp" },
+  { WPB_B,          "ctl_bMoveDown" },
+  { WPB_X,          "ctl_bUseOrComputer" },
+  { WPB_Y,          "ctl_bWeaponFlip" },
+  { WPB_LB,         "ctl_bWeaponPrev" },
+  { WPB_RB,         "ctl_bWeaponNext" },
+  { WPB_DPAD_UP,    "ctl_bWeaponPrev" },
+  { WPB_DPAD_DOWN,  "ctl_bWeaponNext" },
+  { WPB_BACK,       "ctl_bComputer" },
+  { WPB_LSTICK,     "ctl_b3rdPersonView" },
+  { WPB_RSTICK,     "ctl_bCenterView" },
+};
+// how fast the right stick turns at full tilt (degrees per second, at sensitivity 50)
+static const FLOAT _fPadTurnSpeed = 220.0f;
+static const FLOAT _fPadLookSpeed = 150.0f;
+
+// the gamepad drives the first local player: moving and looking around with the sticks
+// (also when prescanning, so turning is as smooth as with the mouse), and the buttons
+static void AddPadAction(const CControls &ctrls, const CPlayerCharacter &pc, CPlayerAction &paAction, BOOL bPreScan)
+{
+  static ULONG _ulLastButtons = 0;
+  static CTimerValue _tvLast;
+  static BOOL _bTimed = FALSE;
+
+  const CLocalPlayer &lp = _pGame->gm_lpLocalPlayers[0];
+  if (lp.lp_pplsPlayerSource==NULL || &pc!=&_pGame->gm_apcPlayers[lp.lp_iPlayer]) {
+    return;
+  }
+  ULONG ulButtons = 0;
+  FLOAT fMoveX = 0, fMoveY = 0, fLookX = 0, fLookY = 0;
+  if (_pInput->IsInputEnabled()) {
+    Web_GetPadInput(ulButtons, fMoveX, fMoveY, fLookX, fLookY);
+  }
+
+  // moving: an analog axis, like the touch stick
+  paAction.pa_vTranslation(1) += fMoveX;
+  paAction.pa_vTranslation(3) += fMoveY;
+
+  // looking: turning speed grows with the square of the tilt (fine aiming near the
+  // middle), for the time since the last action (a long gap is a pause)
+  const CTimerValue tvNow = _pTimer->GetHighPrecisionTimer();
+  const FLOAT tmDelta = _bTimed ? Clamp((FLOAT)(tvNow-_tvLast).GetSeconds(), 0.0f, 0.1f) : 0.0f;
+  _tvLast = tvNow;
+  _bTimed = TRUE;
+  const FLOAT fSpeed = ctrls.ctrl_fSensitivity/50.0f * tmDelta;
+  paAction.pa_aRotation(1) -= fLookX*Abs(fLookX) * _fPadTurnSpeed * fSpeed;
+  const FLOAT fUp = -fLookY*Abs(fLookY) * _fPadLookSpeed * fSpeed;
+  paAction.pa_aRotation(2) += ctrls.ctrl_bInvertLook ? -fUp : fUp;
+
+  // the buttons that changed run their actions' commands
+  if (bPreScan) {
+    return;
+  }
+  const ULONG ulChanged = ulButtons ^ _ulLastButtons;
+  for (INDEX i=0; i<(INDEX)ARRAYCOUNT(_aPadActions); i++) {
+    const ULONG ulMask = 1UL<<_aPadActions[i].iButton;
+    if (ulChanged & ulMask) {
+      _pShell->SetINDEX(_aPadActions[i].strAction, (ulButtons & ulMask) ? 1 : 0);
+    }
+  }
+  _ulLastButtons = ulButtons;
+}
+#endif
+
 void CControls::CreateAction(const CPlayerCharacter &pc, CPlayerAction &paAction, BOOL bPreScan)
 {
   // set axis-controlled moving
@@ -780,6 +850,9 @@ void CControls::CreateAction(const CPlayerCharacter &pc, CPlayerAction &paAction
   paAction.pa_aRotation(1) = (ANGLE)-GetAxisValue( AXIS_TURN_LR);
   paAction.pa_aRotation(2) = (ANGLE)GetAxisValue( AXIS_TURN_UD);
   paAction.pa_aRotation(3) = (ANGLE)GetAxisValue( AXIS_TURN_BK);
+#ifdef PLATFORM_EMSCRIPTEN
+  AddPadAction(*this, pc, paAction, bPreScan);
+#endif
   // set axis-controlled view rotation
   paAction.pa_aViewRotation(1) = (ANGLE)GetAxisValue( AXIS_LOOK_LR);
   paAction.pa_aViewRotation(2) = (ANGLE)GetAxisValue( AXIS_LOOK_UD);
@@ -1455,6 +1528,7 @@ void CGame::EndInternal(void)
 BOOL CGame::NewGame(const CTString &strSessionName, const CTFileName &fnWorld,
    CSessionProperties &sp)
 {
+  ResolveAimAssist();
   gam_iObserverConfig = 0;
   gam_iObserverOffset = 0;
   // stop eventually running game
@@ -1522,6 +1596,7 @@ BOOL CGame::NewGame(const CTString &strSessionName, const CTFileName &fnWorld,
 
 BOOL CGame::JoinGame(const CNetworkSession &session)
 {
+  ResolveAimAssist();
   CEnableUserBreak eub;
   gam_iObserverConfig = 0;
   gam_iObserverOffset = 0;
@@ -1563,6 +1638,7 @@ BOOL CGame::JoinGame(const CNetworkSession &session)
 
 BOOL CGame::LoadGame(const CTFileName &fnGame)
 {
+  ResolveAimAssist();
   gam_iObserverConfig = 0;
   gam_iObserverOffset = 0;
 
@@ -2094,6 +2170,11 @@ void CGame::SavePlayersAndControls( void)
     (void) strError;
   }
 
+  UpdateLocalPlayerCharacters();
+}
+
+void CGame::UpdateLocalPlayerCharacters(void)
+{
   // skip checking of players if game isn't on
   if( !gm_bGameOn) return;
 
@@ -2115,6 +2196,40 @@ void CGame::SavePlayersAndControls( void)
   }
 }
 
+
+void CGame::ResolveAimAssist(void)
+{
+  BOOL bDevice = FALSE;
+#ifdef PLATFORM_EMSCRIPTEN
+  bDevice = Web_AimAssistDevice();
+#endif
+  BOOL bChanged = FALSE;
+  BOOL bPlayerChanged = FALSE;
+  for (INDEX iPlayer=0; iPlayer<8; iPlayer++) {
+    CPlayerSettings *pps = (CPlayerSettings *)gm_apcPlayers[iPlayer].pc_aubAppearance;
+    if (pps->ps_ulFlags&PSF_AIMASSISTSET) {
+      continue;
+    }
+    const ULONG ulFlags = bDevice ? (pps->ps_ulFlags|PSF_AIMASSIST) : (pps->ps_ulFlags&~PSF_AIMASSIST);
+    if (ulFlags!=pps->ps_ulFlags) {
+      pps->ps_ulFlags = ulFlags;
+      bChanged = TRUE;
+      // (the player who plays, or would)
+      BOOL bPlaying = iPlayer==gm_iSinglePlayer;
+      for (INDEX iLocal=0; iLocal<4; iLocal++) {
+        bPlaying |= gm_lpLocalPlayers[iLocal].lp_bActive && gm_lpLocalPlayers[iLocal].lp_iPlayer==iPlayer;
+      }
+      bPlayerChanged |= bPlaying;
+    }
+  }
+  if (bPlayerChanged) {
+    CPrintF(bDevice ? TRANS("Aim assist on (touch controls or a gamepad)\n") : TRANS("Aim assist off\n"));
+  }
+  // (the players in the game get it too)
+  if (bChanged) {
+    UpdateLocalPlayerCharacters();
+  }
+}
 
 void CGame::SetupLocalPlayers( void)
 {
@@ -3091,6 +3206,8 @@ CTFileName CGame::GetQuickSaveName(BOOL bSave)
 
 void CGame::GameMainLoop(void)
 {
+  // (a gamepad may come or go at any time)
+  ResolveAimAssist();
   if (gam_bQuickSave && GetSP()->sp_gmGameMode!=CSessionProperties::GM_FLYOVER) {
     if (gam_bQuickSave==2) {
       _tvMenuQuickSave = _pTimer->GetHighPrecisionTimer();

@@ -44,6 +44,22 @@ ENGINE_API void Web_GetTouchInput(UBYTE aubButtons[WTB_COUNT], FLOAT &fLookX, FL
 // position of the touch move stick: -1..1 from left to right and from forward to backward
 ENGINE_API void Web_GetTouchMove(FLOAT &fX, FLOAT &fY);
 
+// gamepad of the page (web/shell/gamepad.js), read with the browser's Gamepad API:
+// called once per frame; while playing it fills the state Web_GetPadInput() reads,
+// in menus it presses keys (see Web_TakeKeyPress()) and moves the mouse
+ENGINE_API void Web_PollGamepad(BOOL bGameInput);
+// the gamepad's buttons, in the order of the browser's standard mapping (bit i: button i)
+enum WebPadButton {
+  WPB_A, WPB_B, WPB_X, WPB_Y, WPB_LB, WPB_RB, WPB_LT, WPB_RT, WPB_BACK, WPB_START,
+  WPB_LSTICK, WPB_RSTICK, WPB_DPAD_UP, WPB_DPAD_DOWN, WPB_DPAD_LEFT, WPB_DPAD_RIGHT,
+  WPB_COUNT
+};
+// the gamepad while playing: buttons held (bits as WebPadButton), and the sticks, each
+// -1..1 (left to right, up to down) with the dead zone taken out; all 0 without one
+ENGINE_API void Web_GetPadInput(ULONG &ulButtons, FLOAT &fMoveX, FLOAT &fMoveY, FLOAT &fLookX, FLOAT &fLookY);
+// whether the player uses touch controls or a gamepad (aim assist is on for them by default)
+ENGINE_API BOOL Web_AimAssistDevice(void);
+
 // next key (SDL key code) pressed with the page's on screen buttons, or 0
 ENGINE_API INDEX Web_TakeKeyPress(void);
 
