@@ -66,6 +66,7 @@ const TYPES = {
   '.png': 'image/png',
   '.json': 'application/json',
   '.torrent': 'application/x-bittorrent',
+  '.webmanifest': 'application/manifest+json',
 };
 
 // cors: let pages of other origins read the files (as a demo mirror must);

@@ -35,7 +35,8 @@ const results = {};
 const errors = [];
 
 async function openPage(query, { blockDemoFiles = false, blockWebTorrent = false, origin = server.url } = {}) {
-  const context = await browser.newContext({ viewport: { width: 640, height: 400 } });
+  // (no service worker: requests through it would get past the routes below)
+  const context = await browser.newContext({ viewport: { width: 640, height: 400 }, serviceWorkers: 'block' });
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(e.stack || e.message));
   page.demoRequests = 0;

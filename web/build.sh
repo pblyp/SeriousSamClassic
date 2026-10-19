@@ -46,7 +46,7 @@ done
 
 # 3. the page and the demo data (SITE_URL: where the site will be, for demo.torrent's web seed;
 #    DEMO_MIRRORS: other sites with a copy of demo/, see README.md)
-cp "$WEB_DIR/shell/"* "$DIST_DIR/"
+cp -R "$WEB_DIR/shell/"* "$DIST_DIR/"
 # the page's libraries (WebTorrent, Trystero)
 if [ "$WEB_DIR/tools/package-lock.json" -nt "$WEB_DIR/tools/node_modules/.package-lock.json" ]; then
   (cd "$WEB_DIR/tools" && npm ci --ignore-scripts --no-audit --no-fund >/dev/null)

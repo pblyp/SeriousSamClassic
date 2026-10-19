@@ -6,11 +6,12 @@
     "smoke": "node smoke.mjs",
     "persistence": "node persistence.mjs",
     "ownfiles": "node ownfiles.mjs",
-    "test": "node smoke.mjs && node persistence.mjs && node ownfiles.mjs && node touch.mjs && node gamepad.mjs && node mobile.mjs && node torrent.mjs && node netplay.mjs && node netplay-browsers.mjs",
+    "test": "node smoke.mjs && node persistence.mjs && node ownfiles.mjs && node touch.mjs && node gamepad.mjs && node mobile.mjs && node torrent.mjs && node pwa.mjs && node netplay.mjs && node netplay-browsers.mjs",
     "touch": "node touch.mjs",
     "gamepad": "node gamepad.mjs",
     "mobile": "node mobile.mjs",
     "torrent": "node torrent.mjs",
+    "pwa": "node pwa.mjs",
     "netplay": "node netplay.mjs",
     "netplay-browsers": "node netplay-browsers.mjs"
   },

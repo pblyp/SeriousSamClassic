@@ -26,6 +26,7 @@
 //                        public trackers and Nostr relays; signal=public for those)
 //   turn=turn:user:password@host:port  a TURN server, for networks that need one
 //   netdebug             log how network game connections are tried (with log)
+//   nosw                 without the service worker (sw.js: starting offline, installing)
 
 (() => {
   const params = new URLSearchParams(location.search);
@@ -309,7 +310,9 @@
     ? savedFullscreen === 'true'
     : TouchControls.wanted('auto');
   fullscreenCheckbox.addEventListener('change', () => saveOption('fullscreen', fullscreenCheckbox.checked));
-  document.getElementById('fullscreen-option').hidden = !PageFullscreen.supported;
+  document.getElementById('fullscreen-option').hidden = !PageFullscreen.supported
+    // (an installed app that is fullscreen already)
+    || window.matchMedia('(display-mode: fullscreen)').matches;
 
   // WebRTC only when asked for (?webrtc=true): the demo from other players too, and network
   // games directly between browsers (see demo-download.js and netplay.js)
@@ -742,6 +745,10 @@
             : waitLeft !== null && waitLeft !== undefined && fraction < 1 ? ` (looking for other players: ${waitLeft} s)` : '';
           setStatus(`Downloading game data… ${Math.round(fraction * 100)}%${from}`, fraction);
         },
+      }).catch((e) => {
+        // (it was never downloaded, or not completely)
+        if (!navigator.onLine) throw new Error('You are offline: the demo can be downloaded once you are online.');
+        throw e;
       });
     });
   }
@@ -921,6 +928,37 @@
       return result;
     };
   }
+
+  // ---------------------------------------------------------------- installing as an app
+
+  // the service worker keeps the page, its scripts and the engine for starting offline
+  // (browsers only allow one on https and localhost); the data is kept in IndexedDB anyway
+  if ('serviceWorker' in navigator && window.isSecureContext && !params.has('nosw')) {
+    navigator.serviceWorker.register('sw.js').catch((e) => log(`No service worker: ${e.message}`));
+  }
+
+  // Chromium lets the page offer installing it (elsewhere: from the browser's menu)
+  const installButton = document.getElementById('install-app');
+  const runningInstalled = () => window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
+  let installPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installPrompt = e;
+    installButton.hidden = runningInstalled();
+  });
+  installButton.addEventListener('click', async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      installPrompt = null;
+      installButton.hidden = true;
+    }
+  });
+  window.addEventListener('appinstalled', () => {
+    installPrompt = null;
+    installButton.hidden = true;
+  });
 
   if (params.has('autostart')) {
     loadDemo();

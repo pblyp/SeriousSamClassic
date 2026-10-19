@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Serious Sam: The First Encounter</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -56,7 +62,8 @@
             today. Game files from your own installation, your settings and your saved games stay on your
             device: they are never shared.</p>
         </details>
-        <p class="purge-row"><button id="clear-assets" class="link-button" type="button">Clear assets&hellip;</button>
+        <p class="purge-row"><button id="install-app" class="link-button" type="button" hidden>Install the app</button>
+          <button id="clear-assets" class="link-button" type="button">Clear assets&hellip;</button>
           <button id="clear-data" class="link-button" type="button">Clear my data&hellip;</button>
           <span id="purge-status" class="note" role="status"></span></p>
       </div>

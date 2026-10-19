@@ -45,6 +45,8 @@ Playing
   controls → Customize controls → Aim assist.
 - **Your own game:** choose *Use my game files…* and pick a .zip of the installation folder
   (with its `.gro` files). On a computer you can also drop the folder itself on the page.
+- **As an app:** install it from the browser's menu (or the start page's *Install the app*
+  button). After one visit it also starts offline.
 - **Network games:** in the game's menu, Network → Start. A badge shows the room code with
   *Copy link* and *Share*. The others open the link, or type the code under Network →
   Join → Specify server. The demo has a cooperative level (Karnak) and a deathmatch

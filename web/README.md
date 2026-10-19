@@ -98,6 +98,16 @@ All files are well below Pages' 100 MB limit (the largest is the demo's 54 MB
   `demo.torrent` lets BitTorrent clients that speak WebRTC (WebTorrent Desktop,
   `webtorrent-hybrid`) seed for the players; the build writes the mirrors and the site's
   URL (when given `SITE_URL`) into it as web seeds.
+- **Installing as an app (PWA).** `shell/manifest.webmanifest` (fullscreen, landscape,
+  icons made from `SamTFE/serioussam.png`) and the service worker `shell/sw.js` make the
+  page installable; Chromium also gets an *Install the app* button on the start page. The
+  service worker fetches from the site first and keeps a copy of what it gets, which
+  answers when the site can't be reached; when it installs, it also fetches what the page
+  needs to start (the first visit loads it before the worker takes over), including the
+  engine build this browser uses. It leaves alone what is kept in IndexedDB anyway (the
+  demo's pieces, `*.data` packages), requests for parts of files, `lan-signal.json` and
+  other sites. So after one visit the game starts offline, with the demo or the player's
+  game files kept in the browser. Only on https and localhost; `?nosw` goes without it.
 - **Size.** The game renders at the size of the canvas (`web_fMaxPixelRatio`, 2 by
   default, limits the resolution on high density displays).
 - **Touch screens.** `shell/touch.js` adds on screen controls (on by default on touch
@@ -245,6 +255,7 @@ needn't be there.
 | `join=K7Q2MX` | join the network game in that room (`quickjoin` to skip the join menu) |
 | `signal=wss://…` | self-hosted Trystero WebSocket relays for network games, instead of the public ones |
 | `turn=turn:user:password@host:port` | a TURN server for network games |
+| `nosw` | without the service worker (no offline start) |
 | `netdebug` | log how network game connections are tried: addresses offered, checks, results (with `log`) |
 | `nethub=ws://…`, `nethub=off` | network games through that hub instead of the page server's, or through none |
 | `net=local` | network games between tabs of this browser, without WebRTC (for tests) |
@@ -264,6 +275,7 @@ node ownfiles.mjs     # "Use my game files": zips made in several ways, broken g
 node touch.mjs        # touch screen controls (--size 844x390 for a phone)
 node gamepad.mjs      # gamepads (a stand-in for the Gamepad API) and aim assist
 node mobile.mjs       # phone players' path on an emulated Android phone and iPhone
+node pwa.mjs          # installable app: manifest, service worker, starting offline
 node torrent.mjs      # demo download: from the site, from IndexedDB, from another player, without WebTorrent, from mirrors
 node netplay.mjs      # network games: hosting, joining by code, leaving, signaling from plain http
 node netplay-browsers.mjs  # network games over WebRTC between WebKit, Firefox and Chromium
