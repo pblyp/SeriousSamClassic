@@ -929,8 +929,8 @@ functions:
     }
   };
   */
-  // speed-based view bobbing (not the original, legacy one): up and down with the steps
-  // as much as the player's speed, and tilting when running sideways
+  // speed-based view bobbing (not the original, legacy one): the view tilts when moving
+  // sideways, more the faster (its height stays, as with the original one)
   BOOL NewBobbing(void) {
     return !plr_bLegacyViewBobbing && !(GetPlayer()->GetSettings()->ps_ulFlags&PSF_NOBOBBING);
   };
@@ -953,7 +953,7 @@ functions:
     return (vSpeed - pl.en_vGravityDir*(vSpeed%pl.en_vGravityDir)).Length();
   };
 
-  // how far the steps bob up and down: more the faster the player goes along the ground
+  // how far the steps bob (for the weapon's push): more the faster the player goes along the ground
   FLOAT StepBob(void) {
     if ((GetPlayer()->GetSettings()->ps_ulFlags&PSF_NOBOBBING) || m_bSwim) {
       return 0.0f;
@@ -972,11 +972,6 @@ functions:
     FLOAT fBob = fSpeed*plr_fViewBob;
     fBob = fBob*0.3f + fBob*0.7f*sin(fPhase);
     return Clamp(fBob, -0.18f, 0.10f);
-  };
-
-  // how far the view bobs up
-  FLOAT ViewBob(void) {
-    return NewBobbing() ? StepBob() : 0.0f;
   };
 
   // how far the view tilts when moving sideways, in degrees: nothing when slow, then
@@ -1000,7 +995,6 @@ functions:
 
     if (NewBobbing()) {
       pl.pl_OrientationAngle(3) += ViewRoll();
-      pl.pl_PositionVector(2) += ViewBob();
     } else if (!(GetPlayer()->GetSettings()->ps_ulFlags&PSF_NOBOBBING)) {
       // banking
       FLOAT fBanking = Lerp(m_fMoveLastBanking, m_fMoveBanking, _pTimer->GetLerpFactor());

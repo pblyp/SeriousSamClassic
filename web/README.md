@@ -134,20 +134,21 @@ All files are well below Pages' 100 MB limit (the largest is the demo's 54 MB
   chosen per player in the Controls menu (in place of iFeel): Auto (on with touch controls
   or a gamepad, `CGame::ResolveAimAssist()`), Yes or No. `dbg_bAimAssist=1` prints where
   shots are turned.
-- **View bobbing** is speed-based, derived from the Quake engine's (`V_CalcBob`,
-  `V_CalcRoll`, released under the GPL): the view goes up and down with the steps as much
-  as the player moves (`CPlayerAnimator::StepBob()`), and tilts when moving sideways:
-  nothing below 3 m/s, then gradually more up to 2° at full running speed, 10 m/s
-  (`ViewRoll()`). The original
-  bobbing, which rocks the view with every step whatever the speed and doesn't go well with
-  gamepads, is still there: Options → Advanced options → Additional display parameters →
-  Miscellaneous → Legacy view bobbing (`plr_bLegacyViewBobbing`, off by default). The
-  weapon keeps its original sideways swaying by default (Legacy weapon bobbing,
-  `plr_bLegacyWeaponBobbing`, on); switched off, it is pushed forward with the steps, as in
-  the Quake engine. `plr_fViewBob` (0.02), `plr_fViewBobCycle` (0.6 s), `plr_fViewBobUp`
-  (0.5), `plr_fViewRollAngle` (2°), `plr_fViewRollMinSpeed` (3 m/s) and
-  `plr_fViewRollMaxSpeed` (10 m/s) tune it; the defaults are the Quake engine's, gentler values are e.g. 0.01 and
-  0.8. The player profile's View bobbing turns off all of it.
+- **View bobbing** is speed-based, derived from the Quake engine's (`V_CalcRoll`,
+  `V_CalcBob`, released under the GPL): the view tilts when moving sideways, nothing below
+  3 m/s, then gradually more up to 2° at full running speed, 10 m/s
+  (`CPlayerAnimator::ViewRoll()`); its height stays while moving, as with the original
+  bobbing. The original bobbing, which rocks the view with every step whatever the speed
+  and doesn't go well with gamepads, is still there: Options → Advanced options →
+  Additional display parameters → Miscellaneous → Legacy view bobbing
+  (`plr_bLegacyViewBobbing`, off by default). The weapon keeps its original sideways
+  swaying by default (Legacy weapon bobbing, `plr_bLegacyWeaponBobbing`, on); switched
+  off, it is pushed forward with the steps as much as the player moves, as in the Quake
+  engine (`StepBob()`). `plr_fViewRollAngle` (2°), `plr_fViewRollMinSpeed` (3 m/s) and
+  `plr_fViewRollMaxSpeed` (10 m/s) tune the tilt; `plr_fViewBob` (0.02),
+  `plr_fViewBobCycle` (0.6 s) and `plr_fViewBobUp` (0.5) the weapon's push (the Quake
+  engine's defaults; gentler values are e.g. 0.01 and 0.8). The player profile's View
+  bobbing turns off all of it.
 - **Sound.** The game mixes sound every frame and keeps only about 70 ms ready for the
   browser, so it doesn't lag behind the picture.
 

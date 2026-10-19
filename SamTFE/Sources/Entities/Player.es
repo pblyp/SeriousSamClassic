@@ -348,7 +348,9 @@ FLOAT hud_tmLatencySnapshot = 1.0f;
 INDEX hud_bWeaponsIconScale = 1; // HUD weapons icons scale: 0 - small, 1 - big
 
 FLOAT plr_fBreathingStrength = 0.0f;
-// speed-based view and weapon bobbing (see CPlayerAnimator::StepBob()), or the original ones
+// speed-based view and weapon bobbing, or the original ones: the view tilts when moving sideways
+// (plr_fViewRoll*, see CPlayerAnimator::ViewRoll()), the weapon is pushed forward with the steps
+// (plr_fViewBob*, see CPlayerAnimator::StepBob())
 INDEX plr_bLegacyViewBobbing = FALSE;
 INDEX plr_bLegacyWeaponBobbing = TRUE;
 FLOAT plr_fViewBob = 0.02f;         // bob height per m/s of speed
