@@ -921,8 +921,10 @@ functions:
       // pushed forward with the steps (speed-based bobbing)
       plPos(3) -= plan.StepBob()*0.4f;
     } else {
-      // swaying to the sides (the original, legacy bobbing)
-      FLOAT fXOffset = Lerp(plan.m_fMoveLastBanking, plan.m_fMoveBanking, _pTimer->GetLerpFactor()) * -0.02f;
+      // swaying to the sides (the original, legacy bobbing), as much as the player's speed
+      // (full at running speed, 10 m/s)
+      const FLOAT fSpeedFactor = Clamp(plan.GroundSpeed()/10.0f, 0.0f, 1.0f);
+      FLOAT fXOffset = Lerp(plan.m_fMoveLastBanking, plan.m_fMoveBanking, _pTimer->GetLerpFactor()) * -0.02f * fSpeedFactor;
       fYOffset += (fXOffset * fXOffset) * 30.0f;
       plPos(1) += fXOffset;
     }

@@ -946,15 +946,19 @@ functions:
     return Lerp(m_vLastTranslation, pl.en_vCurrentTranslationAbsolute, _pTimer->GetLerpFactor());
   };
 
+  // the player's speed along the ground (m/s), smooth between ticks
+  FLOAT GroundSpeed(void) {
+    CPlayer &pl = (CPlayer&)*m_penPlayer;
+    const FLOAT3D vSpeed = LerpedTranslation();
+    return (vSpeed - pl.en_vGravityDir*(vSpeed%pl.en_vGravityDir)).Length();
+  };
+
   // how far the steps bob up and down: more the faster the player goes along the ground
   FLOAT StepBob(void) {
     if ((GetPlayer()->GetSettings()->ps_ulFlags&PSF_NOBOBBING) || m_bSwim) {
       return 0.0f;
     }
-    CPlayer &pl = (CPlayer&)*m_penPlayer;
-    // speed along the ground
-    const FLOAT3D vSpeed = LerpedTranslation();
-    const FLOAT fSpeed = (vSpeed - pl.en_vGravityDir*(vSpeed%pl.en_vGravityDir)).Length();
+    const FLOAT fSpeed = GroundSpeed();
     // where in the step: up during the first part, then down
     const FLOAT fCycle = ClampDn(plr_fViewBobCycle, 0.1f);
     const FLOAT fUp = Clamp(plr_fViewBobUp, 0.01f, 0.99f);
