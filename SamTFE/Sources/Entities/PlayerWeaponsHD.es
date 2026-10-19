@@ -578,6 +578,12 @@ properties:
 260 FLOAT m_fWeaponDrawPowerOld = 0,
 261 FLOAT m_fWeaponDrawPower = 0,
 262 FLOAT m_tmDrawStartTime = 0.0f,
+// aim assist: how far the crosshair and the weapon are turned toward its target (degrees)
+263 FLOAT m_fAimAssistH = 0.0f,
+264 FLOAT m_fAimAssistP = 0.0f,
+265 FLOAT m_fAimAssistLastH = 0.0f,     // (last tick's, for lerping)
+266 FLOAT m_fAimAssistLastP = 0.0f,
+267 CEntityPointer m_penAimAssist,      // the target (for the crosshair's distance and colour)
 
 {
   CEntity *penBullet;
@@ -877,6 +883,11 @@ functions:
       BeginModelRenderingView(apr, pdp);
 
       WeaponMovingOffset(plWeaponMirror.pl_PositionVector);
+      // turned toward the aim assist target (the other way round, as it is mirrored)
+      FLOAT fAimMirrorH, fAimMirrorP;
+      AimAssistAngles(fAimMirrorH, fAimMirrorP);
+      plWeaponMirror.pl_OrientationAngle(1) -= fAimMirrorH;
+      plWeaponMirror.pl_OrientationAngle(2) += fAimMirrorP;
       plWeaponMirror.RelativeToAbsoluteSmooth(plView);
       rmMain.SetObjectPlacement(plWeaponMirror);
 
@@ -907,6 +918,11 @@ functions:
     BeginModelRenderingView(apr, pdp);
 
     WeaponMovingOffset(plWeapon.pl_PositionVector);
+    // turned toward the aim assist target
+    FLOAT fAimH, fAimP;
+    AimAssistAngles(fAimH, fAimP);
+    plWeapon.pl_OrientationAngle(1) += fAimH;
+    plWeapon.pl_OrientationAngle(2) += fAimP;
     plWeapon.RelativeToAbsoluteSmooth(plView);
     rmMain.SetObjectPlacement(plWeapon);
 
@@ -1147,6 +1163,48 @@ functions:
     if( m_tmTargetingStarted>0 && plr_tmSnoopingDelay>0 && tmDelta>plr_tmSnoopingDelay) {
       m_tmSnoopingStarted = tmNow;
     }
+
+    UpdateAimAssistTurn();
+  }
+
+  // aim assist: turn the crosshair and the weapon toward the target that shots would go to,
+  // gliding there (and back when there is none)
+  void UpdateAimAssistTurn(void)
+  {
+    m_fAimAssistLastH = m_fAimAssistH;
+    m_fAimAssistLastP = m_fAimAssistP;
+    FLOAT fWantH = 0.0f;
+    FLOAT fWantP = 0.0f;
+    FLOAT3D vTarget;
+    CEntity *penTarget = NULL;
+    const FLOAT fRange = AimAssistRange();
+    if (fRange>0.0f && AimAssistTarget(fRange, vTarget, penTarget)) {
+      // where the target is seen from the middle of the view
+      CPlacement3D plEye;
+      CalcEyePlacement(plEye);
+      FLOATmatrix3D m;
+      MakeRotationMatrixFast(m, plEye.pl_OrientationAngle);
+      const FLOAT3D vToTarget = vTarget-plEye.pl_PositionVector;
+      const FLOAT fZ = ClampDn(vToTarget%(-m.GetColumn(3)), 0.1f);
+      fWantH = Clamp(-ATan((vToTarget%m.GetColumn(1))/fZ), -10.0f, 10.0f);
+      fWantP = Clamp(ATan((vToTarget%m.GetColumn(2))/fZ), -10.0f, 10.0f);
+      m_penAimAssist = penTarget;
+    }
+    m_fAimAssistH += (fWantH-m_fAimAssistH)*0.5f;
+    m_fAimAssistP += (fWantP-m_fAimAssistP)*0.5f;
+    // (back in the middle: no target any more)
+    if (Abs(m_fAimAssistH)<0.01f && Abs(m_fAimAssistP)<0.01f) {
+      m_fAimAssistH = m_fAimAssistP = 0.0f;
+      m_penAimAssist = NULL;
+    }
+  }
+
+  // how far the crosshair and the weapon are turned toward the aim assist target now (degrees)
+  void AimAssistAngles(FLOAT &fH, FLOAT &fP)
+  {
+    const FLOAT fLerp = _pTimer->GetLerpFactor();
+    fH = Lerp(m_fAimAssistLastH, m_fAimAssistH, fLerp);
+    fP = Lerp(m_fAimAssistLastP, m_fAimAssistP, fLerp);
   }
 
 
@@ -1216,6 +1274,36 @@ functions:
       vOnScreen(1) = (FLOAT)pdp->GetWidth()  *0.5f;
       vOnScreen(2) = (FLOAT)pdp->GetHeight() *0.5f;
       //fDistance    = 100.0f;
+    }
+
+    // aim assist: on its target (gliding there and back)
+    FLOAT fAimH, fAimP;
+    AimAssistAngles(fAimH, fAimP);
+    if (GetPlayer()->m_iViewState==PVT_PLAYEREYES && (fAimH!=0.0f || fAimP!=0.0f)) {
+      FLOAT fAimDistance = 50.0f;
+      CEntity *penAim = m_penAimAssist;
+      if (penAim!=NULL) {
+        FLOATaabbox3D box;
+        penAim->GetBoundingBox(box);
+        fAimDistance = (box.Center()-plViewSource.pl_PositionVector).Length();
+      }
+      CPlacement3D plAim(FLOAT3D(0.0f, 0.0f, 0.0f), ANGLE3D(fAimH, fAimP, 0.0f));
+      plAim.RelativeToAbsolute(plViewSource);
+      FLOAT3D vAimDir;
+      AnglesToDirectionVector(plAim.pl_OrientationAngle, vAimDir);
+      prProjection.ViewerPlacementL() = plViewSource;
+      prProjection.ObjectPlacementL() = CPlacement3D( FLOAT3D(0.0f, 0.0f, 0.0f), ANGLE3D( 0, 0, 0));
+      prProjection.Prepare();
+      prProjection.ProjectCoordinate(plViewSource.pl_PositionVector+vAimDir*fAimDistance, vOnScreen);
+      fDistance = fAimDistance;
+      // its health through the crosshair colour, as when aiming at it
+      if (hud_bCrosshairColoring && penAim!=NULL && (penAim->GetFlags()&ENF_ALIVE)
+       && IsDerivedFromClass(penAim, "Enemy Base")) {
+        const FLOAT fHealth = ((CEnemyBase*)penAim)->GetHealth() / ((CEnemyBase*)penAim)->m_fMaxHealth;
+             if( fHealth<0.25f) { colCrosshair = C_RED;    }
+        else if( fHealth<0.60f) { colCrosshair = C_YELLOW; }
+        else                    { colCrosshair = C_GREEN;  }
+      }
     }
     
     // clamp console variables
@@ -1629,7 +1717,9 @@ functions:
   // the enemy nearest to the crosshair whose bounding box overlaps a square around it, 150%
   // the size of the crosshair (32 pixels at 640 wide, in a 90 degree view: tangent 0.05 to
   // the side). The square is fixed (not the player's crosshair size or view), so that it is
-  // the same on all computers of a network game. Returns where to aim, if anywhere.
+  // the same on all computers of a network game. Only for the knife and the weapons whose
+  // shots hit at once (see AimAssistRange()): shots that fly could go wrong when turned.
+  // Returns where to aim, if anywhere.
   BOOL AimAssistTarget(FLOAT fRange, FLOAT3D &vTarget, CEntity *&penTarget) {
     const FLOAT fZone = 1.5f * 0.05f;
     if (!(GetPlayer()->GetSettings()->ps_ulFlags&PSF_AIMASSIST)) {
@@ -1700,9 +1790,23 @@ functions:
     return bFound;
   };
 
-  // turn a shot to the target of the aim assist, if any (only to the side for weapons whose
-  // shots fly in an arc)
-  void ApplyAimAssist(CPlacement3D &plShot, FLOAT fRange, BOOL bHeadingOnly) {
+  // how far aim assist reaches with the current weapon (0: not with this weapon)
+  FLOAT AimAssistRange(void) {
+    const INDEX iWeapon = m_iCurrentWeapon;
+    // (the knife's reach, and the target's size: the distance is to its centre)
+    if (iWeapon==WEAPON_KNIFE) {
+      return 3.0f+2.0f;
+    }
+    if (iWeapon==WEAPON_COLT || iWeapon==WEAPON_DOUBLECOLT
+     || iWeapon==WEAPON_SINGLESHOTGUN || iWeapon==WEAPON_DOUBLESHOTGUN
+     || iWeapon==WEAPON_TOMMYGUN || iWeapon==WEAPON_MINIGUN) {
+      return 500.0f;
+    }
+    return 0.0f;
+  };
+
+  // turn a shot to the target of the aim assist, if any
+  void ApplyAimAssist(CPlacement3D &plShot, FLOAT fRange) {
     FLOAT3D vTarget;
     CEntity *penTarget = NULL;
     if (!AimAssistTarget(fRange, vTarget, penTarget)) {
@@ -1720,9 +1824,7 @@ functions:
     ANGLE3D aShot;
     DirectionVectorToAnglesNoSnap(vDir, aShot);
     plShot.pl_OrientationAngle(1) = aShot(1);
-    if (!bHeadingOnly) {
-      plShot.pl_OrientationAngle(2) = aShot(2);
-    }
+    plShot.pl_OrientationAngle(2) = aShot(2);
   };
 
   // setup 3D sound parameters
@@ -1747,6 +1849,8 @@ functions:
     // knife start position
     CPlacement3D plKnife;
     CalcWeaponPosition(FLOAT3D(fX, fY, 0), plKnife, TRUE);
+    // (the distance to the target is to its centre)
+    ApplyAimAssist(plKnife, fRange+2.0f);
 
     // create a set of rays to test
     const FLOAT3D &vBase = plKnife.pl_PositionVector;
@@ -1801,7 +1905,7 @@ functions:
   void PrepareBullet(FLOAT fX, FLOAT fY, FLOAT fRange, FLOAT fDamage) {
     // bullet start position
     CalcWeaponPosition(FLOAT3D(fX, fY, 0), plBullet, TRUE);
-    ApplyAimAssist(plBullet, fRange, FALSE);
+    ApplyAimAssist(plBullet, fRange);
     // create bullet
     penBullet = CreateEntity(plBullet, CLASS_BULLET);
     // init bullet
@@ -1859,7 +1963,6 @@ functions:
     CalcWeaponPosition(
       FLOAT3D(wpn_fFX[WEAPON_GRENADELAUNCHER],wpn_fFY[WEAPON_GRENADELAUNCHER], 0), 
       plGrenade, TRUE);
-    ApplyAimAssist(plGrenade, 100.0f, TRUE);
     // create grenade
     CEntityPointer penGrenade = CreateEntity(plGrenade, CLASS_PROJECTILE);
     // init and launch grenade
@@ -1877,7 +1980,6 @@ functions:
     CalcWeaponPosition(
       FLOAT3D(wpn_fFX[WEAPON_ROCKETLAUNCHER],wpn_fFY[WEAPON_ROCKETLAUNCHER], 0), 
       plRocket, TRUE);
-    ApplyAimAssist(plRocket, 300.0f, FALSE);
     // create rocket
     CEntityPointer penRocket= CreateEntity(plRocket, CLASS_PROJECTILE);
     // init and launch rocket
@@ -1970,7 +2072,6 @@ functions:
         CalcWeaponPosition(FLOAT3D(fFX+fRDX, fFY+fRDY, 0), plLaserRay, TRUE);
         break;
     }
-    ApplyAimAssist(plLaserRay, 300.0f, FALSE);
     // create laser projectile
     CEntityPointer penLaser = CreateEntity(plLaserRay, CLASS_PROJECTILE);
     // init and launch laser projectile
@@ -2006,7 +2107,6 @@ functions:
     CalcWeaponPosition(
       FLOAT3D(wpn_fFX[WEAPON_IRONCANNON],wpn_fFY[WEAPON_IRONCANNON], 0), 
       plBall, TRUE);
-    ApplyAimAssist(plBall, 100.0f, TRUE);
     // create cannon ball
     CEntityPointer penBall = CreateEntity(plBall, CLASS_CANNONBALL);
     // init and launch cannon ball

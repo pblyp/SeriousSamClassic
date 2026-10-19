@@ -114,8 +114,11 @@ All files are well below Pages' 100 MB limit (the largest is the demo's 54 MB
   matter. In menus, the console and NETRICSA the pad presses keys (arrows, Enter, Escape,
   Page Up/Down) and the right stick moves the mouse.
 - **Aim assist.** A shot goes to the enemy nearest to the crosshair whose bounding box
-  overlaps a square 150% the size of the crosshair (`CPlayerWeapons::AimAssistTarget()`;
-  bullets, rockets and the laser fully, grenades and cannon balls only to the side). The
+  overlaps a square 150% the size of the crosshair (`CPlayerWeapons::AimAssistTarget()`),
+  only with the knife and the weapons whose shots hit at once: colt, shotguns, tommygun,
+  minigun (`AimAssistRange()`); the shots of the others fly, and are never turned. The
+  crosshair glides onto that enemy and the weapon turns toward it
+  (`CPlayerWeapons::UpdateAimAssistTurn()`), and both glide back when there is none. The
   square is fixed (not the player's crosshair size or view), and the setting travels with
   the player's settings (`PSF_AIMASSIST`), so all computers of a network game agree. It is
   chosen per player in the Controls menu (in place of iFeel): Auto (on with touch controls
