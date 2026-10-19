@@ -13,8 +13,8 @@
 //
 // If the page's server has a packet hub (server.mjs does), players also connect through
 // it: games then work when browsers can't connect to each other with WebRTC (some
-// networks, sandboxed browsers), or without WebRTC at all ("No WebRTC"). WebRTC links
-// are preferred when they work.
+// networks, sandboxed browsers), or without WebRTC at all (the page without ?webrtc=true).
+// WebRTC links are preferred when they work.
 //
 // The engine sees the other players as made up IPv4 addresses (Engine/Base/Emscripten/
 // WebNet.cpp calls open(), join(), send(), receive() and close()).
@@ -39,7 +39,7 @@
   // how long a player whose connections all closed may take to come back on a new one
   // before they count as gone (signaling sometimes replaces connections)
   const LINK_GRACE_MS = 10000;
-  const NO_HUB = 'This site can\'t relay network games: choose WebRTC under Connection type on the start page.';
+  const NO_HUB = 'This site can\'t relay network games without WebRTC: open the page with ?webrtc=true.';
   const randomId = () => Math.random().toString(36).slice(2);
 
   function ip(a, b, c, d) {
@@ -285,8 +285,8 @@
 
   // ------------------------------------------------------------------ netplay
 
-  //   connection(): what the player chose under Connection type: 'webrtc' or 'none' (only
-  //     through the page's server)
+  //   connection(): 'webrtc' (the page with ?webrtc=true) or 'none' (only through the
+  //     page's server)
   //   services(): -> Promise<{ relays, hub }>: what the page's server offers (signaling
   //     relays, packet hub URL), if anything
   //   relays, hub: instead of the page server's (relays: [] for the public ones; hub: false
@@ -504,7 +504,7 @@
       return roomStarting;
     }
 
-    // WebRTC, the page server's hub, or both, as the player chose and the server allows
+    // WebRTC, the page server's hub, or both, as the page is set up and the server allows
     async function openTransports(code, options) {
       const found = (await services().catch(() => null)) || {};
       const relayList = relays !== null ? relays : found.relays || null;

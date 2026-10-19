@@ -11,6 +11,7 @@
 #
 # The site URL (e.g. https://user.github.io/SeriousSamClassic/) is written into
 # demo.torrent as web seed for BitTorrent clients; the page doesn't need it.
+# DEMO_MIRRORS (comma separated URLs, see README.md) lists other sites with a copy of demo/.
 set -euo pipefail
 
 WEB_DIR="$(cd "$(dirname "$0")" && pwd)"

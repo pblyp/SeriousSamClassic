@@ -68,9 +68,21 @@ const TYPES = {
   '.torrent': 'application/x-bittorrent',
 };
 
-export function serve(port = 0, root = DIST, host = '127.0.0.1') {
+// cors: let pages of other origins read the files (as a demo mirror must);
+// served.demo counts the bytes of demo/ files sent, served.notFound the files missing
+export function serve(port = 0, root = DIST, host = '127.0.0.1', { cors = false } = {}) {
+  const served = { demo: 0, notFound: 0 };
+  const corsHeaders = cors ? {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Range',
+    'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
+  } : {};
   const server = http.createServer((req, res) => {
     const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (req.method === 'OPTIONS' && cors) {
+      res.writeHead(204, corsHeaders).end();
+      return;
+    }
     if (urlPath === '/lan-signal.json' && (relay || hub)) {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' })
         .end(JSON.stringify({ ...(relay ? { path: SIGNAL_PATH } : {}), ...(hub ? { hub: HUB_PATH } : {}) }));
@@ -83,10 +95,13 @@ export function serve(port = 0, root = DIST, host = '127.0.0.1') {
     }
     fs.stat(file, (err, st) => {
       if (err || !st.isFile()) {
-        res.writeHead(404).end('not found');
+        served.notFound++;
+        res.writeHead(404, corsHeaders).end('not found');
         return;
       }
+      const isDemo = urlPath.startsWith('/demo/');
       const headers = {
+        ...corsHeaders,
         'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream',
         'Cache-Control': 'no-cache',
         'Accept-Ranges': 'bytes',
@@ -106,10 +121,12 @@ export function serve(port = 0, root = DIST, host = '127.0.0.1') {
           res.writeHead(416, { 'Content-Range': `bytes */${st.size}` }).end();
           return;
         }
+        if (isDemo) served.demo += end - start + 1;
         res.writeHead(206, { ...headers, 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${st.size}` });
         fs.createReadStream(file, { start, end }).pipe(res);
         return;
       }
+      if (isDemo) served.demo += st.size;
       res.writeHead(200, { ...headers, 'Content-Length': st.size });
       fs.createReadStream(file).pipe(res);
     });
@@ -132,6 +149,7 @@ export function serve(port = 0, root = DIST, host = '127.0.0.1') {
       const { port: actual } = server.address();
       resolve({
         url: `http://127.0.0.1:${actual}`,
+        served,
         close: () => {
           if (relay) relay.close();
           if (hub) {

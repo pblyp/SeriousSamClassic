@@ -17,7 +17,7 @@ async function session(fn) {
   });
   const page = context.pages()[0] || await context.newPage();
   try {
-    await page.goto(`${server.url}/index.html?autostart=1&p2p=0&exec=` + encodeURIComponent('web_fMaxPixelRatio=1.25;'));
+    await page.goto(`${server.url}/index.html?autostart=1&exec=` + encodeURIComponent('web_fMaxPixelRatio=1.25;'));
     await page.waitForFunction(() => window.engineLog && window.engineLog.some((l) => l.includes('START NEW DISPLAY MODE')), null, { timeout: 60000 });
     await page.waitForTimeout(3000);
     return await fn(page);

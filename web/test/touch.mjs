@@ -72,7 +72,7 @@ await touch('touchEnd', []);
 const releasedMove = await move();
 
 await page.goto('about:blank');
-await page.goto(`${server.url}/index.html?autostart=1&p2p=0&args=${encodeURIComponent('+level Levels/KarnakDemo.wld')}`);
+await page.goto(`${server.url}/index.html?autostart=1&args=${encodeURIComponent('+level Levels/KarnakDemo.wld')}`);
 await page.waitForFunction(() => window.engineLog.some((l) => l.includes('Adding player')), null, { timeout: 120000 });
 await wait(4000);
 await shot('1-netricsa');

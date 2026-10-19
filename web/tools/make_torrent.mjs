@@ -1,14 +1,18 @@
 // Describes the demo data (a folder named "demo") as a torrent, which the page
 // downloads with WebTorrent from other players and from the web site itself.
 //
-//   node make_torrent.mjs <dist dir> [site url]
+//   [DEMO_MIRRORS=url,...] node make_torrent.mjs <dist dir> [site url]
+//
+// DEMO_MIRRORS: other web sites with a copy of the demo folder (each URL is where demo/
+// is in), which the page downloads from before it asks the site (see web/README.md)
 //
 // Writes into <dist dir>:
 //   demo.torrent       for BitTorrent clients that want to help seeding: lists the
-//                      trackers, and the site as web seed when its URL is given
+//                      trackers, and the mirrors and the site (when its URL is given) as web seeds
 //   demo-page.torrent  the same torrent (same info hash) without them, for the page,
-//                      which adds the trackers and the web seed it wants itself
-//   demo-torrent.json  the trackers, and the files (for downloading them without WebTorrent)
+//                      which adds the trackers and the web seeds it wants itself
+//   demo-torrent.json  the trackers, the mirrors, and the files (for downloading them
+//                      without WebTorrent)
 
 import createTorrent from 'create-torrent';
 import fs from 'node:fs';
@@ -28,6 +32,14 @@ if (!distDir) {
   process.exit(1);
 }
 const demoDir = path.join(distDir, 'demo');
+const slash = (url) => url.replace(/\/?$/, '/');
+const mirrors = (process.env.DEMO_MIRRORS || '').split(/[\s,]+/).filter((url) => url).map(slash);
+for (const url of mirrors) {
+  if (!/^https?:\/\//.test(url)) {
+    console.error(`DEMO_MIRRORS: not a web address: ${url}`);
+    process.exit(1);
+  }
+}
 
 function make(opts) {
   return new Promise((resolve, reject) => {
@@ -45,7 +57,7 @@ function make(opts) {
 
 const forClients = await make({
   announceList: TRACKERS.map((url) => [url]),
-  urlList: siteUrl ? [siteUrl.replace(/\/?$/, '/')] : [],
+  urlList: [...mirrors, ...(siteUrl ? [slash(siteUrl)] : [])],
 });
 const forPage = await make({ announceList: [], urlList: [] });
 fs.writeFileSync(path.join(distDir, 'demo.torrent'), forClients);
@@ -65,7 +77,7 @@ function walk(dir, prefix) {
   }
 }
 walk(demoDir, '');
-fs.writeFileSync(path.join(distDir, 'demo-torrent.json'), JSON.stringify({ trackers: TRACKERS, files }, null, 1) + '\n');
+fs.writeFileSync(path.join(distDir, 'demo-torrent.json'), JSON.stringify({ trackers: TRACKERS, webSeeds: mirrors, files }, null, 1) + '\n');
 
 const total = files.reduce((sum, f) => sum + f.length, 0);
-console.log(`demo.torrent: ${files.length} files, ${(total / 1048576).toFixed(1)} MB${siteUrl ? `, web seed ${siteUrl}` : ''}`);
+console.log(`demo.torrent: ${files.length} files, ${(total / 1048576).toFixed(1)} MB${siteUrl ? `, web seed ${siteUrl}` : ''}${mirrors.length ? `, mirrors ${mirrors.join(' ')}` : ''}`);

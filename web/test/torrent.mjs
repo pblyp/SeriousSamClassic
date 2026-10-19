@@ -6,6 +6,8 @@
 //  3. without WebTorrent, file by file
 //  4. from an http address that isn't localhost (like a computer on the local network),
 //     where browsers have no crypto.subtle (which WebTorrent needs): directly
+//  5. from a mirror (another site with the demo files, ?seed=), not from the site
+//  6. from the site, when the mirror doesn't have the files
 //
 //   node torrent.mjs
 
@@ -13,8 +15,14 @@ import { chromium } from 'playwright';
 import TrackerServer from 'bittorrent-tracker/server';
 import { serve } from './server.mjs';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const server = await serve();
+// mirrors: another origin with the files, and one without them
+const mirror = await serve(0, undefined, '127.0.0.1', { cors: true });
+const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sam-mirror-'));
+const brokenMirror = await serve(0, emptyDir, '127.0.0.1', { cors: true });
 const tracker = new TrackerServer({ udp: false, http: false, ws: true, stats: false });
 await new Promise((resolve) => tracker.listen(0, '127.0.0.1', resolve));
 const trackerUrl = `ws://127.0.0.1:${tracker.ws.address().port}`;
@@ -52,10 +60,10 @@ const written = (page) => page.waitForFunction(() => window.engineLog.some((l) =
   .then(() => page.evaluate(() => window.written));
 const DEMO_BYTES = JSON.parse(fs.readFileSync(new URL('../build/dist/demo-torrent.json', import.meta.url)))
   .files.reduce((sum, file) => sum + file.length, 0);
-// "Demo data ready (X MB downloaded, Y MB of it from the site)" -> [X, Y] (or null)
+// "Demo data ready (X MB downloaded, Y MB of it from mirrors, Z MB from the site)" -> [X, Z, Y] (or null)
 function downloaded(line) {
-  const m = /\((\d+\.\d) MB downloaded, (\d+\.\d) MB of it from the site\)/.exec(line);
-  return m ? [Number(m[1]), Number(m[2])] : null;
+  const m = /\((\d+\.\d) MB downloaded, (\d+\.\d) MB of it from mirrors, (\d+\.\d) MB from the site\)/.exec(line);
+  return m ? [Number(m[1]), Number(m[3]), Number(m[2])] : null;
 }
 // (all of the demo: at least its size, rounded as the page logs it)
 const isWholeDemo = (mb) => mb >= Number((DEMO_BYTES / 1048576).toFixed(1));
@@ -63,7 +71,7 @@ const readyLine = async (page) => (await engineLog(page)).find((l) => l.startsWi
 
 // 1. from the site, then from IndexedDB
 {
-  const page = await openPage('p2p=0');
+  const page = await openPage('');
   await waitForLog(page, 'Demo data ready');
   const first = await readyLine(page);
   const firstRequests = page.demoRequests;
@@ -105,7 +113,7 @@ async function webRtcWorks() {
 if (!await webRtcWorks()) {
   console.log('skip another player shares the demo: WebRTC connections fail on this machine');
 } else {
-  const query = `trackers=${encodeURIComponent(trackerUrl)}`;
+  const query = `webrtc=true&trackers=${encodeURIComponent(trackerUrl)}`;
   const seeder = await openPage(query);
   await waitForLog(seeder, 'Demo data ready');
   const leecher = await openPage(query, { blockDemoFiles: true });
@@ -120,7 +128,7 @@ if (!await webRtcWorks()) {
 
 // 3. without WebTorrent
 {
-  const page = await openPage('p2p=0', { blockWebTorrent: true });
+  const page = await openPage('', { blockWebTorrent: true });
   const bytes = await written(page);
   results['falls back to downloading the files'] = (await engineLog(page)).some((l) => l.includes('downloading the files directly'))
     && bytes === DEMO_BYTES;
@@ -129,7 +137,7 @@ if (!await webRtcWorks()) {
 
 // 4. from an address on the local network
 {
-  const page = await openPage(`connection=secure&trackers=${encodeURIComponent(trackerUrl)}`,
+  const page = await openPage(`webrtc=true&trackers=${encodeURIComponent(trackerUrl)}`,
     { origin: server.url.replace('127.0.0.1', 'sam.test') });
   const bytes = await written(page);
   const log = await engineLog(page);
@@ -140,9 +148,38 @@ if (!await webRtcWorks()) {
   await page.context().close();
 }
 
+// 5. from a mirror
+{
+  const siteBefore = server.served.demo;
+  const page = await openPage(`seed=${encodeURIComponent(mirror.url)}`);
+  await waitForLog(page, 'Demo data ready');
+  const line = await readyLine(page);
+  const [total, fromSite, fromMirrors] = downloaded(line) || [];
+  results[`from a mirror, not the site (${line}, site sent ${server.served.demo - siteBefore} bytes)`] = isWholeDemo(total)
+    && fromMirrors === total && fromSite === 0 && server.served.demo === siteBefore && await written(page) === DEMO_BYTES;
+  await page.context().close();
+}
+
+// 6. a mirror without the files: the site after a while
+{
+  const started = Date.now();
+  const page = await openPage(`seed=${encodeURIComponent(brokenMirror.url)}`);
+  await waitForLog(page, 'Demo data ready');
+  const line = await readyLine(page);
+  const log = await engineLog(page);
+  const asked = log.find((l) => l.startsWith('Demo download: from the site too')) || '';
+  const [total, fromSite] = downloaded(line) || [];
+  results[`a broken mirror: from the site (${asked}; ${line}; ${((Date.now() - started) / 1000).toFixed(0)} s)`] = brokenMirror.served.notFound > 0
+    && isWholeDemo(total) && fromSite === total && await written(page) === DEMO_BYTES;
+  await page.context().close();
+}
+
 await browser.close();
 tracker.close();
 server.close();
+mirror.close();
+brokenMirror.close();
+fs.rmSync(emptyDir, { recursive: true, force: true });
 
 results['no page errors'] = errors.length === 0;
 let failed = false;

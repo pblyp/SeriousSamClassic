@@ -44,7 +44,8 @@ for variant in $VARIANTS; do
   cp "$out/serioussam.js" "$out/serioussam.wasm" "$DIST_DIR/$variant/"
 done
 
-# 3. the page and the demo data (SITE_URL: where the site will be, for demo.torrent's web seed)
+# 3. the page and the demo data (SITE_URL: where the site will be, for demo.torrent's web seed;
+#    DEMO_MIRRORS: other sites with a copy of demo/, see README.md)
 cp "$WEB_DIR/shell/"* "$DIST_DIR/"
 # the page's libraries (WebTorrent, Trystero)
 if [ "$WEB_DIR/tools/package-lock.json" -nt "$WEB_DIR/tools/node_modules/.package-lock.json" ]; then
@@ -56,6 +57,9 @@ if [ ! -f "$DIST_DIR/demo-page.torrent" ] || [ ! -f "$DIST_DIR/base-data.data" ]
     "$WEB_DIR/fetch_demo_data.sh"
   fi
   "$WEB_DIR/package_demo.sh" "$DIST_DIR" "${SITE_URL:-}"
+else
+  # (the demo is packaged already: the torrent again, in case the mirrors changed)
+  node "$WEB_DIR/tools/make_torrent.mjs" "$DIST_DIR" "${SITE_URL:-}" >/dev/null
 fi
 
 echo "Built into $DIST_DIR"

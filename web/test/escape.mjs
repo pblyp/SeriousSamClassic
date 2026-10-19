@@ -34,7 +34,7 @@ await page.addInitScript(() => {
   }, true);
 });
 await page.bringToFront();
-await page.goto(`${server.url}/index.html?autostart=1&p2p=0&args=${encodeURIComponent('+level Levels/KarnakDemo.wld')}`);
+await page.goto(`${server.url}/index.html?autostart=1&args=${encodeURIComponent('+level Levels/KarnakDemo.wld')}`);
 await page.waitForFunction(() => window.engineLog.some((l) => l.includes('Adding player')), null, { timeout: 120000 });
 await page.waitForTimeout(4000);
 

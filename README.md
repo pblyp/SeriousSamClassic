@@ -41,13 +41,11 @@ Playing
   *Copy link* and *Share*. The others open the link, or type the code under Network →
   Join → Specify server. The demo has a cooperative level (Karnak) and a deathmatch
   level (Desert Temple).
-- **Connection type** on the start page:
-  - *WebRTC* (default) downloads the demo from other players too, and connects network
-    games directly.
-  - *No WebRTC* downloads only from the site, and runs network games through the page's
-    server.
-
-  The start page explains both, including what is shared: only the free demo.
+- **WebRTC** is off by default: the demo comes from the site (and its mirrors), and
+  network games go through the page's server, if it can pass them on (GitHub Pages
+  can't). Open the page with `?webrtc=true` to download the demo from other players too
+  (your browser then shares it while you play: only the free demo) and to connect network
+  games directly.
 
 Running it yourself
 -------------------

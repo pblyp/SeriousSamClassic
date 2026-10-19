@@ -78,25 +78,26 @@ All files are well below Pages' 100 MB limit (the largest is the demo's 54 MB
   account's other projects) are left alone.
   Settings are saved whenever the page is hidden, since a tab can be closed at any time.
 - **Demo download.** `shell/demo-download.js` gets the demo with
-  [WebTorrent](https://webtorrent.io): from other players who have the page open
-  (found through public WebSocket trackers, connected with WebRTC), and from the site,
-  whose `demo/` files are the torrent's web seed. The site is only asked when no other
-  players are found within 15 s, or they give less than 1 MB/s, which keeps the site's
-  bandwidth (GitHub Pages: 100 GB a month) for those who need it. The pieces are kept in IndexedDB, so
-  later visits download nothing, and the page shares them (at most 1 MB/s) while the game
-  runs. If WebTorrent can't be used, the files are downloaded one by one. The start page's
-  *Connection type* chooses how, for this and for network games (remembered in the browser):
-  - *WebRTC*, the default: on https and localhost. Browsers only offer
-    `crypto.subtle` (WebTorrent's SHA-1) there; on other plain http addresses (e.g. a
-    computer on the local network) the files are downloaded one by one, and not kept.
-  - *No WebRTC*: no other players (still through WebTorrent's web seed and cache).
+  [WebTorrent](https://webtorrent.io) from its web seeds: [mirrors](#demo-mirrors) first,
+  and the site itself, whose `demo/` files are a web seed too. The site is only asked when
+  the mirrors give nothing within 5 s, or less than 1 MB/s (right away when there are
+  none), which keeps the site's bandwidth (GitHub Pages: 100 GB a month) for those who need
+  it. The pieces are kept in IndexedDB, so later visits download nothing. If WebTorrent
+  can't be used, the files are downloaded one by one (from a mirror, else the site), and
+  not kept: e.g. on plain http addresses other than localhost (a computer on the local
+  network), where browsers don't offer `crypto.subtle` (WebTorrent's SHA-1).
+- **WebRTC** is only used with `?webrtc=true` (on https and localhost), for the demo
+  and for network games. The demo then also comes from other players who have the page
+  open (found through public WebSocket trackers, connected with WebRTC); the site is asked
+  when none are found within 15 s, or they give less than 1 MB/s. The page shares the
+  pieces (at most 1 MB/s) while the game runs, and says so on the start page.
 
   Only the official demo's files are shared, which to our knowledge may be freely
   redistributed; the start page explains this to players. Files from a player's own
   installation are never shared.
   `demo.torrent` lets BitTorrent clients that speak WebRTC (WebTorrent Desktop,
-  `webtorrent-hybrid`) seed for the players; the build writes the site's URL into it as
-  web seed when given `SITE_URL`.
+  `webtorrent-hybrid`) seed for the players; the build writes the mirrors and the site's
+  URL (when given `SITE_URL`) into it as web seeds.
 - **Size.** The game renders at the size of the canvas (`web_fMaxPixelRatio`, 2 by
   default, limits the resolution on high density displays).
 - **Touch screens.** `shell/touch.js` adds on screen controls (on by default on touch
@@ -137,8 +138,11 @@ connect with WebRTC, and/or through the page's server (`shell/netplay.js`,
   `/hub`, announced in `/lan-signal.json`), players also connect through it. Games then
   work when browsers can't connect with WebRTC (some networks, and browsers whose WebRTC
   is restricted: sandboxed Snap/Flatpak builds, privacy settings, proxies), and without
-  WebRTC at all (*No WebRTC*). When WebRTC connects too, the game moves to it (the page's
+  WebRTC at all (the page without `?webrtc=true`). When WebRTC connects too, the game moves to it (the page's
   log says which way each player is connected). `?nethub=off` leaves the hub out.
+- Without `?webrtc=true`, network games only go through the page's server: not on
+  GitHub Pages, which can't pass them on. Room links carry `webrtc=true` when the host
+  uses it.
 - Signaling encrypts the connection offers with `crypto.subtle`, which browsers only have
   on https and localhost: on plain http (e.g. a computer on the local network), network
   games go through the page's server only.
@@ -159,6 +163,37 @@ connect with WebRTC, and/or through the page's server (`shell/netplay.js`,
 - The demo has one level for network games: Karnak, cooperative. In the browser the
   connection settings start at "5mb - Fiber Optics" (the game's defaults are for modems).
 
+## Demo mirrors
+
+Other web sites can serve the demo, so that players don't use up the site's bandwidth
+(and the download goes on when the site is slow). A mirror is a copy of the built
+`web/build/dist/demo/` folder anywhere on the web; its URL is the address of the folder
+that *contains* `demo/` (for `https://cdn.example.org/sam/demo/Levels/…` it is
+`https://cdn.example.org/sam/`). Players' browsers download pieces of the files from it
+with range requests (each piece is checked against the torrent, so a broken mirror can't
+spoil the download), which needs these CORS headers:
+
+```
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Headers: Range
+Access-Control-Expose-Headers: Content-Range, Content-Length, Accept-Ranges
+```
+
+For example the CORS policy of an S3 or Cloudflare R2 bucket:
+
+```json
+[{ "AllowedOrigins": ["*"], "AllowedMethods": ["GET", "HEAD"],
+   "AllowedHeaders": ["Range"], "ExposeHeaders": ["Content-Range", "Content-Length", "Accept-Ranges"] }]
+```
+
+The build lists the mirrors in `demo-torrent.json` (and `demo.torrent`) from
+`DEMO_MIRRORS` (comma separated URLs): `DEMO_MIRRORS=https://cdn.example.org/sam/ ./build.sh`.
+The GitHub Pages workflow takes it from the repository variable `DEMO_MIRRORS`
+(Settings → Secrets and variables → Actions → Variables). `?seed=…` adds mirrors for a
+visit (for trying one out). A mirror must have exactly the files of the build's `demo/`,
+which the torrent's pieces are made of; empty files are left out of the torrent and
+needn't be there.
+
 ## Page options
 
 `index.html?…`
@@ -172,8 +207,9 @@ connect with WebRTC, and/or through the page's server (`shell/netplay.js`,
 | `build=jspi` or `build=asyncify` | force a build |
 | `touch=on`, `off` or `auto` | touch screen controls |
 | `touchdebug` | show what the touch controls receive (for problems on devices) |
-| `connection=secure` or `none` | the start page's Connection type (also `p2p=…`, and `1`, `0`, `off`) |
-| `trackers=wss://…` | trackers (comma separated) to find other players with |
+| `webrtc=true` | use WebRTC: the demo from other players too (and shared with them), network games directly between browsers |
+| `seed=https://…` | more [demo mirrors](#demo-mirrors) (comma separated) |
+| `trackers=wss://…` | trackers (comma separated) to find other players with (with `webrtc=true`) |
 | `join=K7Q2MX` | join the network game in that room (`quickjoin` to skip the join menu) |
 | `signal=wss://…` | self-hosted Trystero WebSocket relays for network games, instead of the public ones |
 | `turn=turn:user:password@host:port` | a TURN server for network games |
@@ -195,7 +231,7 @@ node persistence.mjs  # settings survive reloading the page
 node ownfiles.mjs     # "Use my game files": zips made in several ways, broken game files, clearing stored data (--browser webkit)
 node touch.mjs        # touch screen controls (--size 844x390 for a phone)
 node mobile.mjs       # phone players' path on an emulated Android phone and iPhone
-node torrent.mjs      # demo download: from the site, from IndexedDB, from another player, without WebTorrent
+node torrent.mjs      # demo download: from the site, from IndexedDB, from another player, without WebTorrent, from mirrors
 node netplay.mjs      # network games: hosting, joining by code, leaving, signaling from plain http
 node netplay-browsers.mjs  # network games over WebRTC between WebKit, Firefox and Chromium
 node escape.mjs       # Escape with the mouse captured (opens a browser window; not part of npm test)
@@ -206,7 +242,7 @@ node demo-frames.mjs --frames 30,90 --native <native>/ScreenShots   # compare wi
 
 `run.mjs` also profiles (`--profile 20,30`, use `--build asyncify`: Chrome doesn't
 attribute WebAssembly running under JSPI) and counts WebGL calls (`--glstats`). The tests
-download the demo from the local server only (`p2p=0`, i.e. No WebRTC; `run.mjs --p2p` uses the public
+download the demo from the local server only (without `webrtc=true`; `run.mjs --p2p` uses the public
 trackers). The two-player part of `torrent.mjs` is skipped where WebRTC can't connect
 (e.g. with some VPNs); the network game tests connect through a local TURN server
 (`node-turn`) there.

@@ -25,7 +25,7 @@ const turn = new Turn({ listeningPort: 3478, listeningIps: ['127.0.0.1'], relayI
 turn.start();
 // (--public: the public trackers and Nostr relays instead of the local relay)
 const usePublic = process.argv.includes('--public');
-const query = `connection=secure&nethub=off${usePublic ? '&signal=public' : `&signal=${encodeURIComponent(`ws://127.0.0.1:${relay.address().port}`)}`}`
+const query = `webrtc=true&nethub=off${usePublic ? '&signal=public' : `&signal=${encodeURIComponent(`ws://127.0.0.1:${relay.address().port}`)}`}`
   + `&turn=${encodeURIComponent('turn:sam:sam@127.0.0.1:3478')}`;
 
 const results = {};

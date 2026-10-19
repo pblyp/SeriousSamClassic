@@ -48,7 +48,7 @@ async function openPlayer(name, query, origin = server.url) {
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(`${name}: ${e.stack || e.message}`));
   // (by default "No WebRTC": the demo from the site, games through the page server's hub)
-  await page.goto(`${origin}/index.html?autostart=1${buildQuery}&${/connection=/.test(query) ? '' : 'connection=none&'}${query}`);
+  await page.goto(`${origin}/index.html?autostart=1${buildQuery}&${query}`);
   return page;
 }
 const engineLog = (page) => page.evaluate(() => window.engineLog);
@@ -180,9 +180,9 @@ async function play(label, transportQuery) {
 }
 
 // 1. through the hub
-await play('hub', 'connection=none');
+await play('hub', '');
 {
-  const lost = await openPlayer('lost', 'connection=none&join=ZZZ-ZZZ&quickjoin');
+  const lost = await openPlayer('lost', 'join=ZZZ-ZZZ&quickjoin');
   await lost.waitForFunction(() => Module.netplay && Module.netplay.state === 'failed', null, { timeout: 120000 }).catch(() => {});
   await lost.waitForTimeout(2000);
   await lost.screenshot({ path: path.join(out, 'hub-no-game.png') });
@@ -216,21 +216,21 @@ await relay.ready;
 const signal = encodeURIComponent(`ws://127.0.0.1:${relay.address().port}`);
 const webRtc = await webRtcWorks();
 if (webRtc) {
-  await play('webrtc', 'connection=secure&nethub=off');
+  await play('webrtc', 'webrtc=true&nethub=off');
 } else {
   const turn = new Turn({ listeningPort: 3478, listeningIps: ['127.0.0.1'], relayIps: ['127.0.0.1'],
     authMech: 'long-term', credentials: { sam: 'sam' }, debugLevel: 'OFF' });
   turn.start();
-  await play('webrtc (TURN)', `connection=secure&nethub=off&turn=${encodeURIComponent('turn:sam:sam@127.0.0.1:3478')}`);
+  await play('webrtc (TURN)', `webrtc=true&nethub=off&turn=${encodeURIComponent('turn:sam:sam@127.0.0.1:3478')}`);
   turn.stop();
   // 3. WebRTC chosen, but it can't connect here: through the page server's hub
-  await play('fallback', 'connection=secure');
+  await play('fallback', 'webrtc=true');
 }
 
 // 4. plain http without the page server's hub: WebRTC can't work there (no crypto.subtle),
 // and the page says what to do
 {
-  const http = await openPlayer('http host', `connection=secure&nethub=off&signal=${signal}&args=${encodeURIComponent('+level Levels/KarnakDemo.wld +server')}`,
+  const http = await openPlayer('http host', `webrtc=true&nethub=off&signal=${signal}&args=${encodeURIComponent('+level Levels/KarnakDemo.wld +server')}`,
     server.url.replace('127.0.0.1', 'sam.test'));
   await http.waitForFunction(() => Module.netplay && Module.netplay.state === 'failed', null, { timeout: 120000 }).catch(() => {});
   results['plain http without a hub explains itself'] =

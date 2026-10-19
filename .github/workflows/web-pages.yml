@@ -62,6 +62,10 @@ jobs:
       run: |
         source emsdk/emsdk_env.sh
         SITE_URL="${{ steps.pages.outputs.base_url }}/" web/build.sh Release
+      env:
+        # other sites with a copy of demo/ (comma separated), asked before this one: a
+        # repository variable (Settings > Secrets and variables > Actions > Variables)
+        DEMO_MIRRORS: ${{ vars.DEMO_MIRRORS }}
 
     - name: Check file sizes
       run: |

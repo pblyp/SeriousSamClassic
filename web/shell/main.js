@@ -10,10 +10,11 @@
 //   build=jspi|asyncify  force a build instead of picking one by browser support
 //   touch=auto|on|off    touch screen controls (otherwise as chosen on the page)
 //   touchdebug           show what the touch controls receive
-//   connection=secure|none  the start page's Connection type: WebRTC (demo download from
-//                        other players too, network games directly; on https/localhost),
-//                        or no WebRTC (the demo from this site, network games through its
-//                        server); also p2p=..., with 1 and 0 as secure and none
+//   webrtc=true          use WebRTC (only on https/localhost): the demo also from other players
+//                        (and shared with them), network games directly between browsers.
+//                        Without it, the demo comes from its web seeds (mirrors, this site) and
+//                        network games go through this page's server
+//   seed=https://...     more demo mirrors (comma separated), besides the ones the build lists
 //   trackers=wss://...   trackers (comma separated) for finding other players
 //   join=K7Q2MX          join the network game in that room (a link the host shares)
 //   quickjoin            join right away, without the join menu (for tests)
@@ -120,6 +121,7 @@
   // other sites), in two kinds that are cleared separately:
   // - assets: the demo's pieces, the base game files package, the player's game files;
   // - the player's data: settings and saved games (/user), and the start page's options
+  // ('p2pMode' was the Connection type option, which earlier versions kept)
   const OPTION_KEYS = ['touchControls', 'fullscreen', 'p2pMode'];
   const OWN_FILES_DB = 'sam-own-files';
 
@@ -304,16 +306,14 @@
   fullscreenCheckbox.addEventListener('change', () => saveOption('fullscreen', fullscreenCheckbox.checked));
   document.getElementById('fullscreen-option').hidden = !PageFullscreen.supported;
 
-  // how the demo is downloaded (see demo-download.js and the page's explanation)
-  // the start page's Connection type (secure, none: see the page's explanation)
-  const p2pSelect = document.getElementById('p2p-mode');
-  function loadP2pMode() {
-    // ("off" is what "From this site only" was saved as; "insecure" was another WebRTC option)
-    const modes = { 1: 'secure', secure: 'secure', insecure: 'secure', 0: 'none', off: 'none', none: 'none' };
-    return modes[params.get('connection')] || modes[params.get('p2p')] || modes[loadOption('p2pMode')] || 'secure';
+  // WebRTC only when asked for (?webrtc=true): the demo from other players too, and network
+  // games directly between browsers (see demo-download.js and netplay.js)
+  const webrtc = ['true', '1'].includes(params.get('webrtc'));
+  if (webrtc) {
+    document.getElementById('webrtc-note').hidden = false;
+    // (browsers only offer the cryptography it needs on https and localhost)
+    document.getElementById('webrtc-insecure').hidden = !!window.crypto.subtle;
   }
-  p2pSelect.value = loadP2pMode();
-  p2pSelect.addEventListener('change', () => saveOption('p2pMode', p2pSelect.value));
 
   // ---------------------------------------------------------------- player's files
 
@@ -568,7 +568,8 @@
   const netShare = document.getElementById('net-share');
   let netBadgeHidden = false;
   let netBadgeTimer = 0;
-  const roomLink = (code) => `${location.origin}${location.pathname}?join=${code}`;
+  // (the others join the way the host plays: with WebRTC or without)
+  const roomLink = (code) => `${location.origin}${location.pathname}?join=${code}${webrtc ? '&webrtc=true' : ''}`;
 
   // what the host shares, and how joining goes
   function updateNetBadge(net) {
@@ -635,7 +636,7 @@
     // ?signal=: these relays (public: the public trackers and Nostr relays), not the page server's
     const signal = params.get('signal');
     return NetPlay.create({
-      connection: () => ({ secure: 'webrtc', none: 'none' })[p2pSelect.value],
+      connection: () => (webrtc ? 'webrtc' : 'none'),
       services: serverServices,
       relays: signal ? (signal === 'public' ? [] : list('signal')) : null,
       hub: params.get('nethub') === 'off' ? false : params.get('nethub'),
@@ -724,10 +725,11 @@
   // the demo comes from other players and this site (see demo-download.js)
   function loadDemo() {
     load(async () => {
-      const trackers = params.get('trackers');
+      const list = (name) => (params.get(name) ? params.get(name).split(',').filter((u) => u) : null);
       dataFiles = await DemoDownload.download({
-        p2p: p2pSelect.value !== 'none',
-        trackers: trackers ? trackers.split(',') : null,
+        p2p: webrtc,
+        trackers: list('trackers'),
+        mirrors: list('seed') || [],
         log,
         onProgress(fraction, peers, waitLeft) {
           const from = peers > 0 ? ` (with ${peers} other player${peers > 1 ? 's' : ''})`
@@ -812,7 +814,6 @@
     if (await clearMyData()) {
       // the start page's options are back to their defaults
       touchSelect.value = loadTouchMode();
-      p2pSelect.value = loadP2pMode();
       fullscreenCheckbox.checked = TouchControls.wanted('auto');
       updateTouchHelp();
       purgeStatus.textContent = 'Your data cleared.';

@@ -137,7 +137,7 @@ if (offered) {
 // clearing the assets keeps the player's data, and the other way round
 await page.reload();
 await page.waitForSelector('#play-own:not([hidden])', { timeout: 10000 }).catch(() => {});
-await page.evaluate(() => localStorage.setItem('p2pMode', 'off'));
+await page.evaluate(() => localStorage.setItem('touchControls', 'off'));
 let before = await pageDatabases(page);
 page.once('dialog', (dialog) => dialog.dismiss());
 await page.click('#clear-assets');
@@ -148,7 +148,7 @@ await page.waitForFunction(() => document.getElementById('purge-status').textCon
 let after = await pageDatabases(page);
 results[`clearing the assets asks first, keeps settings and saved games (${before} -> ${after || 'none'})`] = keptWhenCancelled
   && before.includes('sam-own-files') && !after.includes('sam-own-files') && !after.includes('EM_PRELOAD_CACHE')
-  && after.includes('/user') && await page.evaluate(() => localStorage.getItem('p2pMode') === 'off')
+  && after.includes('/user') && await page.evaluate(() => localStorage.getItem('touchControls') === 'off')
   && !await page.isVisible('#play-own');
 before = after;
 page.once('dialog', (dialog) => dialog.accept());
@@ -157,7 +157,7 @@ await page.waitForFunction(() => document.getElementById('purge-status').textCon
 after = await pageDatabases(page);
 results[`clearing my data removes settings and saved games and resets the options (${before} -> ${after || 'none'})`] =
   before.includes('/user') && !after.includes('/user')
-  && await page.evaluate(() => localStorage.getItem('p2pMode') === null && document.getElementById('p2p-mode').value === 'secure');
+  && await page.evaluate(() => localStorage.getItem('touchControls') === null && document.getElementById('touch-mode').value === 'auto');
 
 // broken game files: the page says what is wrong and what to do
 async function failWith(zip) {

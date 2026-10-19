@@ -109,8 +109,8 @@ export async function runGame(opts) {
     }
   });
 
-  // the demo from the local web seed only, unless --p2p (public trackers)
-  const query = new URLSearchParams({ autostart: '1', p2p: opts.p2p ? '1' : '0' });
+  // the demo from the local web seed only, unless --p2p (WebRTC: public trackers)
+  const query = new URLSearchParams({ autostart: '1', ...(opts.p2p ? { webrtc: 'true' } : {}) });
   if (opts.args) query.set('args', opts.args);
   if (opts.exec) query.set('exec', opts.exec);
   if (opts.build) query.set('build', opts.build);

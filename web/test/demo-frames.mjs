@@ -110,7 +110,7 @@ async function capture() {
   const browser = await browserType.launch({ headless: true, args });
   const page = await browser.newPage({ viewport: { width: opts.width, height: opts.height } });
   page.on('pageerror', (e) => console.log('pageerror:', e.message));
-  await page.goto(`${server.url}/index.html?autostart=1&p2p=0&exec=${encodeURIComponent(CAPTURE_COMMANDS + (opts.exec || ''))}`);
+  await page.goto(`${server.url}/index.html?autostart=1&exec=${encodeURIComponent(CAPTURE_COMMANDS + (opts.exec || ''))}`);
 
   // commands to run once the demo plays (after startup scripts and video settings)
   if (opts.late) {

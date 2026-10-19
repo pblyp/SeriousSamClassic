@@ -2,14 +2,16 @@
 
 // Downloads the demo's game files.
 //
-// With WebTorrent: from other players who have the page open, and from this site,
-// which serves the same files (demo/...) as the torrent's web seed. The site is only
-// asked when other players can't do it (none found within PEER_WAIT_MS, or too slow),
-// which keeps the site's bandwidth (GitHub Pages: 100 GB a month) for those who need it. The pieces are
-// kept in IndexedDB, so the next visit doesn't download anything, and the page
-// keeps sharing them with other players while the game runs.
+// With WebTorrent: from other players who have the page open (with WebRTC only), from
+// mirrors (other web sites with a copy of demo/..., as the torrent's web seeds), and from
+// this site, which serves the same files. The site is only asked when the others can't
+// do it (nothing within PEER_WAIT_MS or MIRROR_WAIT_MS, or too slow), which keeps the
+// site's bandwidth (GitHub Pages: 100 GB a month) for those who need it. The pieces are
+// kept in IndexedDB, so the next visit doesn't download anything, and with WebRTC the
+// page keeps sharing them with other players while the game runs.
 //
-// Without WebTorrent (it can't load, or nothing arrives): the files one by one.
+// Without WebTorrent (it can't load, or nothing arrives): the files one by one, from a
+// mirror or else this site.
 
 (() => {
   // where downloaded pieces are kept: one IndexedDB database per version of the demo data
@@ -23,6 +25,8 @@
   const PEER_WAIT_MS = 15000;
   const PEER_SPEED_ENOUGH = 1024 * 1024;
   const PEER_SLOW_MS = 5000;
+  // the same without other players, when there are mirrors (they answer right away)
+  const MIRROR_WAIT_MS = 5000;
 
   function request(req) {
     return new Promise((resolve, reject) => {
@@ -131,7 +135,10 @@
     }
   }
 
-  async function downloadWithWebTorrent(info, { p2p, trackers, onProgress, log }) {
+  // where a web seed's files are (a folder with demo/... in it), ending in a slash
+  const seedUrl = (url) => new URL('.', new URL(url.replace(/\/?$/, '/'), location.href)).href;
+
+  async function downloadWithWebTorrent(info, { p2p, trackers, mirrors, onProgress, log }) {
     // (WebTorrent checks pieces with crypto.subtle, which browsers only have on https and localhost)
     if (!window.crypto.subtle) {
       throw new Error('it needs this page on https');
@@ -139,7 +146,7 @@
     const WebTorrent = await importWebTorrent();
     const torrentFile = new Uint8Array(await (await fetchOk('demo-page.torrent')).arrayBuffer());
     const client = new WebTorrent({ tracker: p2p ? {} : false, dht: false, lsd: false, utPex: p2p });
-    const seed = new URL('.', location.href).href;
+    const seed = seedUrl('.');
 
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -160,11 +167,13 @@
       let lastActivity = -1;
       let lastProgressTime = performance.now();
 
-      // the site as a source: right away without other players, else when they don't do
+      // the site as a source: right away without other players or mirrors, else when they
+      // don't do
       let haveMetadata = false;
       let siteAsked = false;
       let slowSince = 0;
       const lookingSince = performance.now();
+      const waitMs = p2p ? PEER_WAIT_MS : MIRROR_WAIT_MS;
       const askSite = (why) => {
         if (siteAsked || settled || !haveMetadata) return;
         siteAsked = true;
@@ -175,14 +184,18 @@
       };
       torrent.once('metadata', () => {
         haveMetadata = true;
-        if (!p2p) askSite('not from other players');
+        for (const mirror of mirrors) {
+          log(`Demo download: from the mirror ${mirror}`);
+          torrent.addWebSeed(mirror);
+        }
+        if (!p2p && mirrors.length === 0) askSite('not from other players');
       });
 
       timer = setInterval(() => {
         const now = performance.now();
         const peers = torrent.wires.filter((wire) => wire.type !== 'webSeed').length;
         // (seconds left before the site is asked, while looking for other players)
-        const waitLeft = siteAsked ? null : Math.max(0, Math.ceil((PEER_WAIT_MS - (now - lookingSince)) / 1000));
+        const waitLeft = siteAsked || !p2p ? null : Math.max(0, Math.ceil((waitMs - (now - lookingSince)) / 1000));
         onProgress(torrent.progress || 0, peers, waitLeft);
         if (!siteAsked && torrent.progress < 1) {
           if (torrent.downloadSpeed >= PEER_SPEED_ENOUGH) {
@@ -190,8 +203,9 @@
           } else if (!slowSince) {
             slowSince = now;
           }
-          if (now - lookingSince >= PEER_WAIT_MS && slowSince && now - slowSince >= Math.min(PEER_SLOW_MS, now - lookingSince)) {
-            askSite(peers ? 'other players are too slow' : 'no other players found');
+          if (now - lookingSince >= waitMs && slowSince && now - slowSince >= Math.min(PEER_SLOW_MS, now - lookingSince)) {
+            const others = [p2p && 'other players', mirrors.length && 'mirrors'].filter((x) => x).join(' and ');
+            askSite(torrent.downloaded > 0 ? `${others} are too slow` : `nothing from ${others}`);
           }
         }
         // (pieces verified: arriving, or from IndexedDB on a later visit; not just bytes
@@ -211,12 +225,20 @@
         settled = true;
         clearInterval(timer);
         onProgress(1, 0);
-        // received from other players vs. this site (a fresh visit; on later ones nothing is downloaded)
-        const fromSite = torrent.wires.filter((wire) => wire.type === 'webSeed')
-          .reduce((sum, wire) => sum + wire.downloaded, 0);
-        log(`Demo data ready (${(torrent.received / 1048576).toFixed(1)} MB downloaded, `
-          + `${(fromSite / 1048576).toFixed(1)} MB of it from the site)`);
-        client.throttleUpload(UPLOAD_LIMIT);
+        // received from other players, mirrors and this site (a fresh visit; on later ones
+        // nothing is downloaded)
+        const mb = (bytes) => `${(bytes / 1048576).toFixed(1)} MB`;
+        // (a web seed's wire doesn't say which one it is: WebTorrent's peers, by URL, do)
+        const fromSeed = (url) => {
+          const peer = torrent._peers && torrent._peers.get(url);
+          return (peer && peer.wire && peer.wire.downloaded) || 0;
+        };
+        const fromSite = fromSeed(seed);
+        const fromMirrors = mirrors.reduce((sum, url) => sum + fromSeed(url), 0);
+        log(`Demo data ready (${mb(torrent.received)} downloaded, ${mb(fromMirrors)} of it from mirrors, `
+          + `${mb(fromSite)} from the site)`);
+        // (without WebRTC there is no one to share them with)
+        if (p2p) client.throttleUpload(UPLOAD_LIMIT);
         DemoDownload.client = client;
         deleteOtherVersions(torrent.infoHash).catch(() => {});
         resolve(torrent.files.map((file) => ({
@@ -228,12 +250,26 @@
     });
   }
 
-  async function downloadWithHttp(info, { onProgress }) {
+  // a file from the first of the sites that has it
+  async function fetchFromAny(bases, path) {
+    let error = null;
+    for (const base of bases) {
+      try {
+        return await fetchOk(new URL(path, base).href);
+      } catch (e) {
+        error = e;
+      }
+    }
+    throw error;
+  }
+
+  async function downloadWithHttp(info, { mirrors, onProgress }) {
     const total = info.files.reduce((sum, file) => sum + file.length, 0);
+    const bases = [...mirrors, seedUrl('.')];
     let done = 0;
     const files = [];
     for (const file of info.files) {
-      const response = await fetchOk(`demo/${file.path.split('/').map(encodeURIComponent).join('/')}`);
+      const response = await fetchFromAny(bases, `demo/${file.path.split('/').map(encodeURIComponent).join('/')}`);
       const reader = response.body.getReader();
       const chunks = [];
       for (;;) {
@@ -252,18 +288,21 @@
   // the demo's files as [{ path, size, read() -> Promise<ArrayBuffer> }]
   //   p2p:        also get them from (and share them with) other players
   //   trackers:   trackers to find other players with (default: the ones the build lists)
+  //   mirrors:    more web sites with the files, besides the ones the build lists
   //   onProgress: called with (fraction done, number of other players connected, seconds
   //               left before the site is asked too, or null once it is)
-  async function download({ p2p = true, trackers = null, onProgress = () => {}, log = () => {} } = {}) {
+  async function download({ p2p = true, trackers = null, mirrors = [], onProgress = () => {}, log = () => {} } = {}) {
     const info = await (await fetchOk('demo-torrent.json')).json();
+    const site = seedUrl('.');
+    mirrors = [...new Set([...(info.webSeeds || []), ...mirrors].map(seedUrl))].filter((url) => url !== site);
     if (navigator.storage && navigator.storage.persist) {
       navigator.storage.persist().catch(() => {});
     }
     try {
-      return await downloadWithWebTorrent(info, { p2p, trackers: trackers || info.trackers, onProgress, log });
+      return await downloadWithWebTorrent(info, { p2p, trackers: trackers || info.trackers, mirrors, onProgress, log });
     } catch (e) {
       log(`Downloading with WebTorrent failed (${e.message || e}), downloading the files directly`);
-      return downloadWithHttp(info, { onProgress });
+      return downloadWithHttp(info, { mirrors, onProgress });
     }
   }
 

@@ -42,37 +42,19 @@
             </select>
           </label>
           <label class="option" id="fullscreen-option"><input id="fullscreen" type="checkbox"> Fullscreen</label>
-          <label class="option">Connection type
-            <select id="p2p-mode">
-              <option value="secure">WebRTC</option>
-              <option value="none">No WebRTC</option>
-            </select>
-          </label>
         </div>
+        <p id="webrtc-note" class="note" hidden>WebRTC is on: the demo is also downloaded with WebTorrent from
+          other players who have this page open, and while you play, your browser shares it with them in turn
+          (at most 1&nbsp;MB/s). Network games connect the players' browsers directly, so players can see each
+          other's IP addresses.<span id="webrtc-insecure" hidden> WebRTC needs this page on https (or localhost):
+          here, the demo comes from this site, and network games go through its server (if it can pass them on).</span></p>
         <details class="about">
-          <summary>About WebRTC connections</summary>
-          <p>With WebRTC, browsers connect to each other directly. They find each other through
-            this page's server, if it helps with that, or else through public BitTorrent trackers
-            and Nostr relays. Players connected this way can see each other's IP addresses.</p>
-          <p>The demo is downloaded with WebTorrent: from other players who have this page open,
-            and from this site. While you play, your browser shares the demo with other players
-            in turn (at most 1&nbsp;MB/s).</p>
-          <p><strong>Network games</strong> (Network &rarr; Start in the game's menu): the player who
-            starts one gets a room code and a link to send to the others. Their browsers connect
-            with WebRTC, and also through this page's server if it can pass games on, which then
-            covers browsers and networks that WebRTC doesn't get through.</p>
-          <p><strong>WebRTC</strong> works when the page is opened over https (or on
-            localhost): browsers only offer the cryptography it needs there. Elsewhere, e.g. from
-            a computer on your local network, the demo comes from this site only, and network games
-            go through this page's server, if it can pass them on.</p>
-          <p><strong>No WebRTC</strong> doesn't connect to other players' browsers: the demo comes
-            from this site, and network games go through this page's server (only possible if it
-            can pass games on).</p>
-          <p>What is shared: only the files of the official <em>Serious Sam: The First
-            Encounter</em> demo (2001), which, to our knowledge, is freely redistributable. It is
-            the same demo that was given away on magazine discs and download sites and that the
-            Internet Archive hosts today. Nothing else is ever shared: game files from your own
-            installation, your settings and your saved games stay on your device.</p>
+          <summary>About the demo</summary>
+          <p>The game files downloaded here are only those of the official <em>Serious Sam: The First
+            Encounter</em> demo (2001), which, to our knowledge, is freely redistributable. It is the same
+            demo that was given away on magazine discs and download sites and that the Internet Archive hosts
+            today. Game files from your own installation, your settings and your saved games stay on your
+            device: they are never shared.</p>
         </details>
         <p class="purge-row"><button id="clear-assets" class="link-button" type="button">Clear assets&hellip;</button>
           <button id="clear-data" class="link-button" type="button">Clear my data&hellip;</button>
