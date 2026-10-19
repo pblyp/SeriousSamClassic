@@ -67,6 +67,14 @@ enum AnimatorAction {
 
 
 extern FLOAT plr_fBreathingStrength;
+extern INDEX plr_bLegacyViewBobbing;
+extern INDEX plr_bLegacyWeaponBobbing;
+extern FLOAT plr_fViewBob;
+extern FLOAT plr_fViewBobCycle;
+extern FLOAT plr_fViewBobUp;
+extern FLOAT plr_fViewRollAngle;
+extern FLOAT plr_fViewRollMinSpeed;
+extern FLOAT plr_fViewRollMaxSpeed;
 extern FLOAT plr_fViewDampFactor;
 extern FLOAT plr_fViewDampLimitGroundUp;
 extern FLOAT plr_fViewDampLimitGroundDn;
@@ -274,6 +282,7 @@ properties:
  37 FLOAT m_fSidestepBanking = 0.0f,
  38 INDEX m_iWeaponLast = -1,
  39 FLOAT m_fBodyAnimTime = -1.0f,
+ 40 FLOAT3D m_vLastTranslation = FLOAT3D(0,0,0),  // player speed in the last tick (for lerping view bobbing)
 
 {
   CModelObject *pmoModel;
@@ -777,6 +786,7 @@ functions:
     m_bSidestepBankingRight = FALSE;
     m_fSidestepLastBanking = 0.0f;
     m_fSidestepBanking = 0.0f;
+    m_vLastTranslation = FLOAT3D(0,0,0);
 
     // weapon
     SetWeapon();
@@ -796,6 +806,7 @@ functions:
 //    m_fRecoilLastOffset = m_fRecoilOffset;
     m_fMoveLastBanking = m_fMoveBanking;                          // store last banking for lerping
     m_fSidestepLastBanking = m_fSidestepBanking;
+    m_vLastTranslation = pl.en_vCurrentTranslationAbsolute;
   };
 
   // animate banking
@@ -918,11 +929,75 @@ functions:
     }
   };
   */
+  // speed-based view bobbing (not the original, legacy one): up and down with the steps
+  // as much as the player's speed, and tilting when running sideways
+  BOOL NewBobbing(void) {
+    return !plr_bLegacyViewBobbing && !(GetPlayer()->GetSettings()->ps_ulFlags&PSF_NOBOBBING);
+  };
+
+  // the weapon pushed forward with the steps (not the original sideways swaying)
+  BOOL NewWeaponBobbing(void) {
+    return !plr_bLegacyWeaponBobbing && !(GetPlayer()->GetSettings()->ps_ulFlags&PSF_NOBOBBING);
+  };
+
+  // the player's speed, smooth between ticks
+  FLOAT3D LerpedTranslation(void) {
+    CPlayer &pl = (CPlayer&)*m_penPlayer;
+    return Lerp(m_vLastTranslation, pl.en_vCurrentTranslationAbsolute, _pTimer->GetLerpFactor());
+  };
+
+  // how far the steps bob up and down: more the faster the player goes along the ground
+  FLOAT StepBob(void) {
+    if ((GetPlayer()->GetSettings()->ps_ulFlags&PSF_NOBOBBING) || m_bSwim) {
+      return 0.0f;
+    }
+    CPlayer &pl = (CPlayer&)*m_penPlayer;
+    // speed along the ground
+    const FLOAT3D vSpeed = LerpedTranslation();
+    const FLOAT fSpeed = (vSpeed - pl.en_vGravityDir*(vSpeed%pl.en_vGravityDir)).Length();
+    // where in the step: up during the first part, then down
+    const FLOAT fCycle = ClampDn(plr_fViewBobCycle, 0.1f);
+    const FLOAT fUp = Clamp(plr_fViewBobUp, 0.01f, 0.99f);
+    const TIME tmNow = _pTimer->GetLerpedCurrentTick();
+    FLOAT fPhase = (tmNow - floor(tmNow/fCycle)*fCycle) / fCycle;
+    if (fPhase<fUp) {
+      fPhase = PI*fPhase/fUp;
+    } else {
+      fPhase = PI + PI*(fPhase-fUp)/(1.0f-fUp);
+    }
+    FLOAT fBob = fSpeed*plr_fViewBob;
+    fBob = fBob*0.3f + fBob*0.7f*sin(fPhase);
+    return Clamp(fBob, -0.18f, 0.10f);
+  };
+
+  // how far the view bobs up
+  FLOAT ViewBob(void) {
+    return NewBobbing() ? StepBob() : 0.0f;
+  };
+
+  // how far the view tilts when moving sideways, in degrees: nothing when slow, then
+  // gradually more up to full running speed
+  FLOAT ViewRoll(void) {
+    if (!NewBobbing() || m_bSwim) {
+      return 0.0f;
+    }
+    CPlayer &pl = (CPlayer&)*m_penPlayer;
+    const FLOAT3D vRight(pl.en_mRotation(1, 1), pl.en_mRotation(2, 1), pl.en_mRotation(3, 1));
+    const FLOAT fSide = LerpedTranslation()%vRight;
+    const FLOAT fRamp = ClampDn(plr_fViewRollMaxSpeed-plr_fViewRollMinSpeed, 0.1f);
+    const FLOAT fTilt = Clamp((Abs(fSide)-plr_fViewRollMinSpeed)/fRamp, 0.0f, 1.0f)*plr_fViewRollAngle;
+    // (like the original: to the left when moving right)
+    return -Sgn(fSide)*fTilt;
+  };
+
   // change view
   void ChangeView(CPlacement3D &pl) {
     TIME tmNow = _pTimer->GetLerpedCurrentTick();
 
-    if (!(GetPlayer()->GetSettings()->ps_ulFlags&PSF_NOBOBBING)) {
+    if (NewBobbing()) {
+      pl.pl_OrientationAngle(3) += ViewRoll();
+      pl.pl_PositionVector(2) += ViewBob();
+    } else if (!(GetPlayer()->GetSettings()->ps_ulFlags&PSF_NOBOBBING)) {
       // banking
       FLOAT fBanking = Lerp(m_fMoveLastBanking, m_fMoveBanking, _pTimer->GetLerpFactor());
       fBanking = fBanking * fBanking * Sgn(fBanking) * 0.25f;

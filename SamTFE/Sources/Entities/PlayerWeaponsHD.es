@@ -928,10 +928,16 @@ functions:
   void WeaponMovingOffset(FLOAT3D &plPos)
   {
     CPlayerAnimator &plan = (CPlayerAnimator&)*((CPlayer&)*m_penPlayer).m_penAnimator;
-    FLOAT fXOffset = Lerp(plan.m_fMoveLastBanking, plan.m_fMoveBanking, _pTimer->GetLerpFactor()) * -0.02f;
     FLOAT fYOffset = Lerp(plan.m_fWeaponYLastOffset, plan.m_fWeaponYOffset, _pTimer->GetLerpFactor()) * 0.15f;
-    fYOffset += (fXOffset * fXOffset) * 30.0f;
-    plPos(1) += fXOffset;
+    if (plan.NewWeaponBobbing()) {
+      // pushed forward with the steps (speed-based bobbing)
+      plPos(3) -= plan.StepBob()*0.4f;
+    } else {
+      // swaying to the sides (the original, legacy bobbing)
+      FLOAT fXOffset = Lerp(plan.m_fMoveLastBanking, plan.m_fMoveBanking, _pTimer->GetLerpFactor()) * -0.02f;
+      fYOffset += (fXOffset * fXOffset) * 30.0f;
+      plPos(1) += fXOffset;
+    }
     plPos(2) += fYOffset;
     // apply grenade launcher pumping
     if( m_iCurrentWeapon == WEAPON_GRENADELAUNCHER)

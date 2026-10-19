@@ -348,6 +348,15 @@ FLOAT hud_tmLatencySnapshot = 1.0f;
 INDEX hud_bWeaponsIconScale = 1; // HUD weapons icons scale: 0 - small, 1 - big
 
 FLOAT plr_fBreathingStrength = 0.0f;
+// speed-based view and weapon bobbing (see CPlayerAnimator::StepBob()), or the original ones
+INDEX plr_bLegacyViewBobbing = FALSE;
+INDEX plr_bLegacyWeaponBobbing = TRUE;
+FLOAT plr_fViewBob = 0.02f;         // bob height per m/s of speed
+FLOAT plr_fViewBobCycle = 0.6f;     // seconds per step
+FLOAT plr_fViewBobUp = 0.5f;        // part of the step going up
+FLOAT plr_fViewRollAngle = 2.0f;    // tilt when running sideways at full speed (degrees)
+FLOAT plr_fViewRollMinSpeed = 3.0f;  // sideways speed where the tilt starts (m/s)
+FLOAT plr_fViewRollMaxSpeed = 10.0f; // sideways speed of the full tilt (m/s; running)
 extern FLOAT plr_tmSnoopingTime;
 INDEX cht_bKillFinalBoss = FALSE;
 INDEX cht_bDebugFinalBoss = FALSE;
@@ -702,6 +711,14 @@ void CPlayer_OnInitClass(void)
   _pShell->DeclareSymbol("persistent user FLOAT hud_tmWeaponsOnScreen;",  &hud_tmWeaponsOnScreen);
   _pShell->DeclareSymbol("persistent user FLOAT hud_tmLatencySnapshot;",  &hud_tmLatencySnapshot);
   _pShell->DeclareSymbol("persistent user FLOAT plr_fBreathingStrength;", &plr_fBreathingStrength);
+  _pShell->DeclareSymbol("persistent user INDEX plr_bLegacyViewBobbing;", &plr_bLegacyViewBobbing);
+  _pShell->DeclareSymbol("persistent user INDEX plr_bLegacyWeaponBobbing;", &plr_bLegacyWeaponBobbing);
+  _pShell->DeclareSymbol("persistent user FLOAT plr_fViewBob;", &plr_fViewBob);
+  _pShell->DeclareSymbol("persistent user FLOAT plr_fViewBobCycle;", &plr_fViewBobCycle);
+  _pShell->DeclareSymbol("persistent user FLOAT plr_fViewBobUp;", &plr_fViewBobUp);
+  _pShell->DeclareSymbol("persistent user FLOAT plr_fViewRollAngle;", &plr_fViewRollAngle);
+  _pShell->DeclareSymbol("persistent user FLOAT plr_fViewRollMinSpeed;", &plr_fViewRollMinSpeed);
+  _pShell->DeclareSymbol("persistent user FLOAT plr_fViewRollMaxSpeed;", &plr_fViewRollMaxSpeed);
   _pShell->DeclareSymbol("INDEX cht_bKillFinalBoss;",  &cht_bKillFinalBoss);
   _pShell->DeclareSymbol("INDEX cht_bDebugFinalBoss;", &cht_bDebugFinalBoss);
   _pShell->DeclareSymbol("INDEX cht_bDumpFinalBossData;", &cht_bDumpFinalBossData);
